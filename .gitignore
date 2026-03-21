@@ -1,0 +1,45 @@
+# 配置文件（包含敏感信息）
+config/config.yaml
+
+# 数据库
+*.db
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+*.egg-info/
+dist/
+build/
+
+# 环境变量
+.env
+.env.local
+
+# 虚拟环境
+venv/
+.venv/
+env/
+
+# 日志
+*.log
+
+# 运行时数据
+.email_seen.json
+
+# 测试文件
+*.ofd
+*.pdf
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# macOS
+.DS_Store
+
+# 导出文件（用户生成）
+exports/

@@ -1,0 +1,26 @@
+# ============================================================
+# Invoice Clipper — docker-compose 一键启动
+# 用法: docker-compose up
+# 示例: docker-compose run --rm invoice scan
+# ============================================================
+version: "3.8"
+
+services:
+  invoice:
+    build: .
+    image: invoice-clipper:latest
+    container_name: invoice-clipper
+    volumes:
+      # 本地发票目录映射进容器
+      - ~/Documents/发票夹子:/app/data
+      # 可选：Ollama socket（如果有本地 Ollama）
+      # - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY:-}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+    # 如果有本地 Ollama，在宿主机运行:
+    # OLLAMA_BASE_URL=http://host.docker.internal:11434
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    stdin_open: true
+    tty: true
