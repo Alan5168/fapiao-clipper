@@ -8,6 +8,7 @@
   <img src="https://img.shields.io/badge/license-MIT-green?style=for-the-badge" alt="MIT">
   <img src="https://img.shields.io/badge/Privacy-First- green?style=for-the-badge" alt="Privacy-First">
   <img src="https://img.shields.io/badge/Local-LLM-orange?style=for-the-badge" alt="Local-LLM">
+  <img src="https://img.shields.io/badge/TurboQuant-32GB%20优化-9370DB?style=for-the-badge" alt="TurboQuant">
 </p>
 
 <h2 align="center">
@@ -21,6 +22,7 @@
   <a href="#-核心特性">核心特性</a> ·
   <a href="#-问题背景">问题背景</a> ·
   <a href="#-快速开始">快速开始</a> ·
+  <a href="#turboquant-内存优化">TurboQuant</a> ·
   <a href="#-使用指南">使用指南</a> ·
   <a href="#-风控与验真">风控与验真</a> ·
   <a href="#架构">架构</a>
@@ -53,8 +55,11 @@
 - **附件扫描**：自动扫描邮箱 INBOX，发现 PDF/OFD 附件直接下载
 - **目录监控**：配置监控文件夹，新发票放入后自动识别
 
-### 🧠 本地大模型识别
-- **四级降级识别链**：PDF文本 → 阿里百炼glm-5 → 本地glm-ocr → 本地qwen3-vl → PaddleOCR兜底
+### 🧠 四级识别链（v1.1 新增 PDF 文本提取）
+- **第1级：PDF 文本提取** → PyMuPDF / pdfplumber，可搜索 PDF 直接读文字，零成本
+- **第2级：GLM-OCR（Ollama）** → 图片/扫描件，约 2.2GB，完全本地
+- **第3级：TurboQuant Ollama（可选）** → KV Cache 压缩 4-5x，32GB 机器救星
+- **第4级：Qwen3-VL（最终 fallback）** → 释放资源，不行再换
 - **完全本地**：发票图片永不离开你的电脑，没有隐私泄露风险
 - **OFD格式支持**：国内独有格式完整支持（含电子签章验签）
 
@@ -84,7 +89,7 @@
 ### 环境要求
 - Python 3.10+
 - 推荐：Ollama（含 glm-ocr + qwen3-vl）
-- 可选：无 Ollama 时自动降级到 PaddleOCR
+- 可选：TurboQuant server（32GB 以下机器推荐）
 
 ### 零配置启动（推荐首次使用）
 
@@ -101,13 +106,94 @@ setup.bat
 向导会问你：
 1. 📁 发票存放目录在哪？
 2. 📧 要监控邮箱吗？（可选）
-3. 🤖 用哪个识别引擎？（Ollama / 硅基流动 / PaddleOCR）
+3. 🤖 用哪个识别引擎？（Ollama / TurboQuant / 硅基流动 / PaddleOCR）
 4. 🚨 启用失信黑名单吗？
 
 回答完自动生成 `config/config.yaml`，无需手动编辑任何文件。
 
-> 💡 **推荐使用硅基流动**：新用户注册送 **¥16 免费额度**，够用 1000+ 张发票。
-> 👉 [点此注册（用我的邀请码）](https://account.siliconflow.cn/zh/login?redirect=https%3A%2F%2Fcloud.siliconflow.cn&invitation=wV34tYbt)
+---
+
+### 安装 Ollama
+
+```bash
+# macOS
+brew install ollama
+
+# Linux
+curl -fsSL https://ollama.ai/install.sh | sh
+
+# 拉取模型
+ollama pull glm-ocr:latest    # ~2.2GB，主力 OCR
+ollama pull qwen3-vl:latest   # ~6.1GB，fallback
+
+# 验证
+ollama list
+```
+
+---
+
+## ⚡ TurboQuant 内存优化（32GB 以下机器推荐）
+
+> TurboQuant 是 Google 开源的量化技术，可将 GLM-OCR / Qwen3-VL 的 KV Cache 内存压缩 **4-5x**，
+> 让 32GB 机器也能流畅运行发票识别。
+
+### 与标准 Ollama 的区别
+
+| | 标准 Ollama | TurboQuant Ollama |
+|---|---|---|
+| 内存占用 | ~2.2GB（GLM-OCR）| ~500MB（GLM-OCR）|
+| 兼容性 | 官方版本，直接安装 | 需要编译 fork |
+| 速度 | 快 | 略慢（解压开销）|
+| 适用人群 | 64GB+ 机器 | 32GB 以下机器 |
+
+### Build 指引（macOS / Linux）
+
+```bash
+# 1. 克隆 TurboQuant fork
+git clone https://github.com/TheTom/llama-cpp-turboquant.git
+cd llama-cpp-turboquant
+
+# 2. 安装依赖（cmake、gcc、make）
+# macOS:
+brew install cmake go
+
+# 3. 编译 Ollama（TurboQuant 版本）
+# 参考 README.md 的 build 步骤
+go build -o ollama-tq .
+
+# 4. 启动 TurboQuant server（默认 8080 端口）
+./ollama-tq serve
+
+# 5. 在另一个终端拉取模型
+./ollama-tq pull glm-ocr:latest
+./ollama-tq pull qwen3-vl:latest
+```
+
+### 配置发票夹子使用 TurboQuant
+
+```bash
+# 运行配置向导，选择 [2] Ollama + TurboQuant
+python3 setup_config.py
+```
+
+或手动编辑 `config/config.yaml`：
+
+```yaml
+ocr:
+  provider: ollama
+  ollama:
+    base_url: http://127.0.0.1:11434
+    glm_model: glm-ocr:latest
+    qwen_model: qwen3-vl:latest
+  turboquant:
+    enabled: true
+    base_url: http://127.0.0.1:8080   # TurboQuant server 端口
+    glm_model: glm-ocr:latest
+    qwen_model: qwen3-vl:latest
+```
+
+> **注意**：TurboQuant 和标准 Ollama 可以同时运行，互不影响。
+> 发票夹子会在第 3 级自动尝试 TurboQuant，第 2/4 级仍使用标准 Ollama。
 
 ---
 
@@ -125,7 +211,6 @@ cd invoice-clipper
 pip install -r requirements.txt
 
 # 可选：本地 OCR（推荐安装，大幅提升识别率）
-# 安装 Ollama: https://ollama.ai
 ollama pull glm-ocr:latest
 ollama pull qwen3-vl:latest
 
@@ -136,40 +221,8 @@ pip install paddlepaddle paddleocr
 ### 第三步：配置
 
 ```bash
-cp config/config.yaml.example config/config.yaml
-# 用文本编辑器打开 config.yaml，填入以下关键项：
-```
-
-```yaml
-# config/config.yaml
-storage:
-  base_dir: ~/Documents/发票夹子
-  db_path: ~/Documents/发票夹子/invoices.db
-
-ocr:
-  ollama_base_url: http://127.0.0.1:11434
-  ollama_glm_model: glm-ocr:latest
-  ollama_qwen_model: qwen3-vl:latest
-  # bailian_api_key: ${DASHSCOPE_API_KEY}  # 可选
-
-email:
-  enabled: true
-  imap_server: imap.mail.me.com      # 你的 IMAP 服务器
-  imap_port: 993
-  username: your@email.com
-  password: your-app-password         # 应用专用密码（非登录密码）
-  folder: INBOX
-  auto_follow_links: true             # ✅ 自动下载邮件正文中的发票链接
-  trusted_link_domains:                # 只信任这些平台的链接
-    - verify.tax
-    - inv.verify
-
-watch_dirs:
-  - ~/Downloads
-  - ~/Desktop/待处理发票
-
-verification:
-  validity_days: 365                 # 发票有效期（天）
+cp config/config.example.yaml config/config.yaml
+# 用文本编辑器打开 config/config.yaml，填入关键项
 ```
 
 ### 第四步：运行
@@ -210,8 +263,6 @@ python3 main.py export --from 2026-03-01 --to 2026-03-31 --format both
 | `process <file>` | 处理单个文件 |
 
 ### 发货票链接自动下载
-
-这是中国特有的场景：许多公司通过税局平台推送电子发票，邮件里只有链接没有附件。
 
 配置 `auto_follow_links: true` 后，发票夹子会：
 
@@ -264,15 +315,53 @@ python3 main.py export --from 2026-03-01 --to 2026-03-31 --format both
 ```
 发票夹子/
 ├── main.py                    # CLI 入口
+├── setup_config.py            # 交互式配置向导 (v1.1)
 ├── invoice_clipper/
-│   ├── processor.py           # 处理流水线（含自动验真钩子）
-│   ├── recognizer.py          # 四级识别链
-│   ├── verifier.py            # 🚨 风控验真模块
-│   ├── database.py            # SQLite 存储（含验真字段）
-│   ├── exporter.py            # Excel/PDF 导出（含问题发票清单）
-│   ├── email_watcher.py       # 邮箱监控（含链接识别下载）
-│   └── file_processor.py      # PDF/OFD 处理
-└── config/config.yaml          # 用户配置
+│   ├── engines/              # v1.1 新增：识别引擎模块
+│   │   ├── __init__.py
+│   │   ├── base.py           # 引擎抽象基类
+│   │   ├── pdf_text.py      # 第1级：PDF 文本提取
+│   │   └── ollama_vision.py # 第2-4级：Ollama/TurboQuant/Qwen3-VL
+│   ├── recognizer.py         # 四级识别链调度器
+│   ├── verifier.py           # 🚨 风控验真模块
+│   ├── database.py           # SQLite 存储（含验真字段）
+│   ├── exporter.py           # Excel/PDF 导出（含问题发票清单）
+│   ├── email_watcher.py      # 邮箱监控（含链接识别下载）
+│   └── file_processor.py     # PDF/OFD 处理
+└── config/
+    └── config.example.yaml   # 配置示例（含 turboquant 节）
+```
+
+### 四级识别链路（v1.1）
+
+```
+发票文件
+    │
+    ▼
+┌─────────────────────────┐
+│ 第1级：PDF 文本提取       │  ← PyMuPDF / pdfplumber
+│ 可搜索 PDF → 直接读文字    │    完全免费，毫秒级
+│ 失败 →                   │
+└────────────┬────────────┘
+             ▼
+┌─────────────────────────┐
+│ 第2级：GLM-OCR (Ollama) │  ← ~2.2GB，本地推理
+│ 图片/扫描件 → JSON 字段   │    零 API 成本
+│ 失败/低置信度 →          │
+└────────────┬────────────┘
+             ▼
+┌─────────────────────────┐
+│ 第3级：TurboQuant Ollama │  ← KV Cache 压缩 4-5x
+│ 可选，32GB 机器推荐       │    约 ~500MB GLM-OCR
+│ 失败 →                   │
+└────────────┬────────────┘
+             ▼
+┌─────────────────────────┐
+│ 第4级：Qwen3-VL (Ollama)│  ← ~6.1GB，最终 fallback
+│ 释放资源，立即调用        │    不用 DeepSeek
+└────────────┬────────────┘
+             ▼
+          发票数据库
 ```
 
 ### 失信主体黑名单（本地比对）
@@ -295,28 +384,14 @@ python3 main.py blacklist-stats
 
 ---
 
-### 视觉识别引擎（任选其一，自动选择最优）
+## 🔐 隐私与安全
 
-```
-用户配置 provider  ──→  系统自动选择最优引擎
-                                 │
-        ┌────────────────────────┼────────────────────────┐
-        ▼                        ▼                        ▼
-   Ollama 🤖               硅基流动 ☁️              PaddleOCR 🎯
-   (本地，完全免费)         (新用户送¥16)            (离线，免费)
-   qwen3-vl               OpenAI 兼容 API            完全免费
-   glm-4v                  deepseek-v3              无需网络
-        │
-        ▼
-   火山引擎 / OpenAI（备选）
-```
-
-**引擎选择规则**：
-- `provider: ollama` → 使用本地 Ollama（优先）
-- `provider: siliconflow` → 使用硅基流动 API
-- `provider: auto` → 自动选择第一个可用引擎
-
-**自动降级**：主引擎不可用时，自动尝试下一个引擎，全部失败才报错。
+| 数据 | 处理方式 |
+|------|---------|
+| 发票图片 | 仅本地处理，不上传任何云端 |
+| 文本数据 | 仅第1级传给阿里百炼（可选，关闭则纯本地） |
+| 财务数据 | 存储在本地 SQLite，不上云 |
+| 邮箱密码 | 仅存储在本地配置文件 |
 
 ---
 
@@ -328,17 +403,6 @@ docker-compose up
 ```
 
 容器已包含 PaddleOCR，无需配置 Ollama。
-
----
-
-## 🔐 隐私与安全
-
-| 数据 | 处理方式 |
-|------|---------|
-| 发票图片 | 仅本地处理，不上传任何云端 |
-| 文本数据 | 仅第1级传给阿里百炼（可选，关闭则纯本地） |
-| 财务数据 | 存储在本地 SQLite，不上云 |
-| 邮箱密码 | 仅存储在本地配置文件 |
 
 ---
 

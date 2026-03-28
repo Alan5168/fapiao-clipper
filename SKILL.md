@@ -1,10 +1,10 @@
 ---
 name: fapiao-clipper
 description: >
-  发票夹子 - 本地大模型驱动的发票自动识别与报销管理工具。
-  发票放进文件夹 → Python 直接读文字 → Agent 直接读数据库回答"收到哪些发票"
-  扫描件才触发视觉模型。功能：8项风控验真 + 一键导出 Excel + 合并 PDF。
-version: 1.0.0
+  发票夹子 v1.1 - 本地大模型驱动的发票自动识别与报销管理工具。
+  四级降级链：PDF文本提取 → GLM-OCR → TurboQuant → Qwen3-VL。
+  功能：8项风控验真 + 一键导出 Excel + 合并 PDF。
+version: 1.1.0
 metadata:
   openclaw:
     emoji: "🧾"
@@ -14,7 +14,7 @@ metadata:
     always: false
 ---
 
-# 发票夹子 (Invoice Clipper)
+# 发票夹子 (Invoice Clipper) v1.1
 
 纯 Python CLI 工具，OpenClaw / Claude Code / KimiClaw 等任何 Agent 平台均可使用。
 
@@ -31,6 +31,17 @@ Python 提取文字（第1级，99%免费）
       ↓
 Agent 直接读数据库回答问题 ← 完全不消耗 API token
 ```
+
+## 四级识别链 (v1.1)
+
+| 级别 | 引擎 | 触发条件 | 内存占用 |
+|------|------|---------|---------|
+| 第1级 | PyMuPDF / pdfplumber | 可搜索 PDF | **免费** |
+| 第2级 | Ollama GLM-OCR | 图片/扫描件 | ~2.2GB |
+| 第3级 | TurboQuant Ollama | 可选，32GB 以下机器 | ~500MB（4-5x 压缩）|
+| 第4级 | Ollama Qwen3-VL | 最终 fallback | ~6.1GB |
+
+大部分发票走第1级，零成本。
 
 ## 数据库（Agent 直接读）
 
@@ -57,16 +68,18 @@ Agent 可以直接用自然语言读数据库，例如：
 | 查看问题发票 | `python3 {baseDir}/main.py problems` |
 | 同步黑名单 | `python3 {baseDir}/main.py blacklist-sync` |
 
-## 识别引擎说明
+## TurboQuant 配置 (v1.1 新增)
 
-| 级别 | 触发条件 | 引擎 | 费用 |
-|------|---------|------|------|
-| 第1级 | 数字 PDF | Python 正则 | **免费** |
-| 第1.5级 | 第1级字段不全 | 文本 LLM | ¥0.1/1M tokens |
-| 第2级 | 扫描件/图片 | 按 provider 选择 | 按模型价格 |
-| 第3级 | 全部失败 | PaddleOCR | **免费** |
+TurboQuant server 启动后，在 `config/config.yaml` 中启用：
 
-大部分发票走第1级，零成本。
+```yaml
+ocr:
+  turboquant:
+    enabled: true
+    base_url: http://127.0.0.1:8080
+    glm_model: glm-ocr:latest
+    qwen_model: qwen3-vl:latest
+```
 
 ## 意图识别规则
 
@@ -78,28 +91,14 @@ Agent 可以直接用自然语言读数据库，例如：
 | "导出报销" | `export --from ... --to ... --format both` |
 | "不要报销#3那张" | `exclude 3` |
 
----
-
 ## Agent 平台使用
 
 ### 零配置（推荐首次使用）
 
 不想编辑 YAML？运行交互向导，回答几个问题即可：
 
-```
-python3 {baseDir}/setup_config.py
-```
-
-### OpenClaw / Claude Code / KimiClaw 等
-
-调用示例：
-
 ```bash
-# KimiClaw / Claude Code 等：直接让用户回答向导问题
 python3 {baseDir}/setup_config.py
-
-# 发票进来后让 Agent 回答
-# Agent 只需读 SQLite：select * from invoices
 ```
 
 ## 注意事项
@@ -107,3 +106,4 @@ python3 {baseDir}/setup_config.py
 - 原文件永不删除，`exclude` 仅标记
 - 发票有效期默认 365 天（可配置）
 - 有 OpenClaw/Claude Code → 第1级搞定后，Agent 直接读数据库，不消耗 API
+- TurboQuant 是可选优化，未启用时自动跳过

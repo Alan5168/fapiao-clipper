@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-发票夹子 · 交互式配置向导
+发票夹子 · 交互式配置向导 (v1.1)
 运行方式：python3 setup_config.py
 """
 import sys
@@ -35,9 +35,9 @@ def ask_yesno(question, default="n"):
 
 def main():
     print()
-    print("=" * 50)
-    print("  发票夹子 · 首次配置向导")
-    print("=" * 50)
+    print("=" * 60)
+    print("  发票夹子 v1.1 · 首次配置向导")
+    print("=" * 60)
 
     # 1. 发票存放目录
     print("\n─── 发票存放目录 ───")
@@ -48,20 +48,37 @@ def main():
 
     # 2. 识别引擎选择
     print()
-    print("─── 发票识别引擎（第1级 Python 正则始终免费可用）───")
+    print("─── 发票识别引擎（4级降级，本地优先）───")
     print()
-    print("  [1] Ollama 本地模型（推荐，完全免费）")
-    print("       ├─ 第2级: GLM-OCR（~4GB，大部分电脑能跑）")
-    print("       └─ 第3级: Qwen3-VL（~6GB，兜底）")
+    print("  [1] Ollama 本地（推荐，完全免费）")
+    print("       ├─ 第1级: PDF文本提取（免费，数字PDF秒出）")
+    print("       ├─ 第2级: GLM-OCR（~2.2GB，图片/扫描件）")
+    print("       └─ 第3级: Qwen3-VL（~6.1GB，最终兜底）")
     print()
-    print("  [2] 硅基流动云端 API（新用户送¥16免费额度）")
-    print("       └─ 视觉模型调用，扫描件/图片用云端")
+    print("  [2] Ollama + TurboQuant（32GB 以下机器推荐）")
+    print("       ├─ 同上，但 KV Cache 压缩 4-5x")
+    print("       └─ 需要编译 TheTom/llama-cpp-turboquant")
     print()
-    print("  [3] PaddleOCR 本地（完全免费，需 pip 安装）")
+    print("  [3] 硅基流动云端 API（新用户送¥16免费额度）")
     print()
-    print("  [4] 跳过（稍后手动配置）")
+    print("  [4] PaddleOCR 本地（完全免费，需 pip 安装）")
     print()
     choice = ask("选择引擎", default="1", options=["1", "2", "3", "4"])
+
+    # 2.1 TurboQuant 额外配置
+    tq_enabled = False
+    tq_base_url = ""
+    if choice == "2":
+        print()
+        print("─── TurboQuant 配置 ───")
+        print("  TurboQuant server 通常运行在本地 8080 端口")
+        tq_base_url = ask("TurboQuant server 地址", default="http://127.0.0.1:8080")
+        print(f"  -> {tq_base_url}")
+        print("  如果还没编译 TurboQuant，请先：")
+        print("  1. git clone https://github.com/TheTom/llama-cpp-turboquant")
+        print("  2. 按 README 编译（需要 cmake 和 C++ 工具链）")
+        print("  3. 启动 server 后再运行本向导")
+        tq_enabled = True
 
     # 3. 邮件监控
     print("\n─── 邮件监控（可选）───")
@@ -96,7 +113,7 @@ def main():
     # 5. 生成配置
     lines = [
         "# ============================================================",
-        "# 发票夹子 · 配置文件（由 setup_config.py 自动生成）",
+        "# 发票夹子 v1.1 · 配置文件（由 setup_config.py 自动生成）",
         "# ============================================================",
         "",
         "storage:",
@@ -105,20 +122,38 @@ def main():
         "",
     ]
 
-    if choice == "1":
+    if choice in ("1", "2"):
         # Ollama 本地
         lines += [
             "# 发票识别配置",
-            "# 识别逻辑：",
-            "#   第1级 Python 正则（免费，数字 PDF 直接出字段）",
-            "#   第2级 Ollama GLM-OCR（本地，~4GB）",
-            "#   第3级 Ollama Qwen3-VL（本地，~6GB，兜底）",
+            "# 识别链路（4级降级）：",
+            "#   第1级: PDF 文本提取（PyMuPDF / pdfplumber）",
+            "#   第2级: Ollama GLM-OCR（本地，~2.2GB）",
+            "#   第3级: TurboQuant Ollama（可选，内存优化）",
+            "#   第4级: Ollama Qwen3-VL（最终兜底）",
             "ocr:",
+            "  provider: ollama",
             "  ollama:",
             "    base_url: http://127.0.0.1:11434",
             "    glm_model: glm-ocr:latest",
-            "    model: qwen3-vl:latest",
+            "    qwen_model: qwen3-vl:latest",
         ]
+        if tq_enabled:
+            lines += [
+            "  turboquant:",
+            "    enabled: true",
+            "    base_url: " + tq_base_url,
+            "    glm_model: glm-ocr:latest",
+            "    qwen_model: qwen3-vl:latest",
+            ]
+        else:
+            lines += [
+            "  turboquant:",
+            "    enabled: false",
+            "    base_url: http://127.0.0.1:8080",
+            "    glm_model: glm-ocr:latest",
+            "    qwen_model: qwen3-vl:latest",
+            ]
         hint = (
             "  还没装 Ollama？\n"
             "  1. curl -fsSL https://ollama.ai/install.sh | sh\n"
@@ -127,38 +162,28 @@ def main():
             "  运行: python3 main.py scan"
         )
 
-    elif choice == "2":
-        # 硅基流动云端
+    elif choice == "3":
         print()
         print("  [新用户送¥16免费额度，够用1000+张发票]")
         print("  注册: https://account.siliconflow.cn/zh/login?redirect=https%3A%2F%2Fcloud.siliconflow.cn&invitation=wV34tYbt")
-        api_key = ask("输入硅基流动 API Key（注册后获取）", default="")
+        api_key = ask("输入硅基流动 API Key", default="")
         lines += [
             "# 发票识别配置",
-            "# 识别逻辑：",
-            "#   第1级 Python 正则（免费，数字 PDF 直接出字段）",
-            "#   第2级 硅基流动云端视觉模型（扫描件/图片）",
             "ocr:",
+            "  provider: siliconflow",
             "  siliconflow:",
             "    api_key: \"" + (api_key or "YOUR_API_KEY") + "\"",
             "    base_url: https://api.siliconflow.cn/v1",
-            "    model: Pro/PaddleOCR-VL-1.5",
+            "    vision_model: Pro/PaddleOCR-VL-1.5",
+            "    text_model: Pro/deepseek-ai/DeepSeek-V3.2",
         ]
-        hint = (
-            "  还没硅基流动账号？\n"
-            "  1. 点上方链接注册（用我的邀请码有奖励）\n"
-            "  2. 获取 API Key 后填入上方 siliconflow.api_key\n"
-            "  运行: python3 main.py scan"
-        )
+        hint = "  运行: python3 main.py scan"
 
-    elif choice == "3":
-        # PaddleOCR 本地
+    elif choice == "4":
         lines += [
             "# 发票识别配置",
-            "# 识别逻辑：",
-            "#   第1级 Python 正则（免费，数字 PDF 直接出字段）",
-            "#   第2级 PaddleOCR（本地，完全免费，需要 pip 安装）",
             "ocr:",
+            "  provider: paddleocr",
             "  paddleocr:",
             "    enabled: true",
         ]
@@ -168,7 +193,7 @@ def main():
         lines += [
             "# 发票识别配置（稍后手动填写）",
             "ocr:",
-            "  # 稍后在 config.yaml 中配置 ollama / siliconflow / paddleocr",
+            "  # 稍后在 config.yaml 中配置",
         ]
         hint = "  稍后编辑 config/config.yaml"
 
@@ -200,12 +225,12 @@ def main():
     config_file.write_text("\n".join(lines))
 
     print()
-    print("=" * 50)
-    print(f"  配置完成: {config_file}")
+    print("=" * 60)
+    print(f"  ✅ 配置完成: {config_file}")
     print()
     print("  下一步:")
     print("  " + hint.replace("\n", "\n  "))
-    print("=" * 50)
+    print("=" * 60)
 
 
 if __name__ == "__main__":

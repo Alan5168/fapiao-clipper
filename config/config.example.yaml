@@ -1,5 +1,5 @@
 # ============================================================
-# 发票夹子 · 配置文件
+# 发票夹子 · 配置文件 (v1.1)
 # 使用：cp config/config.yaml.example config/config.yaml 然后填写
 # ============================================================
 
@@ -9,31 +9,42 @@ storage:
   db_path: ~/Documents/发票夹子/invoices.db
 
 # ============================================================
-# AI 识别配置
+# AI 识别配置 (v1.1)
 # ============================================================
 ocr:
   # 引擎选择：
   #   ollama      - 本地 Ollama（完全免费，需安装 ollama）
   #   siliconflow - 硅基流动（推荐，免费额度够用，新用户送¥16）
   #   paddleocr   - 本地 PaddleOCR（完全免费，无需网络）
-  provider: siliconflow
+  provider: ollama
 
-  # ── 硅基流动（推荐，免费额度够用）─────────────────────────
+  # ── 本地 Ollama（完全免费）──────────────────────────────
+  # 安装：brew install ollama
+  # 拉取模型：ollama pull glm-ocr:latest && ollama pull qwen3-vl:latest
+  ollama:
+    base_url: http://127.0.0.1:11434
+    glm_model: glm-ocr:latest    # 第2级主力 OCR 引擎
+    qwen_model: qwen3-vl:latest  # 第4级 fallback 引擎
+
+  # ── TurboQuant Ollama（可选，32GB 内存优化）─────────────
+  # KV Cache 压缩 4-5x，适合 32GB 以下机器
+  # build 指引见 README.md "TurboQuant 内存优化" 章节
+  # 注意：需要使用 TheTom/llama-cpp-turboquant fork 编译的 ollama
+  turboquant:
+    enabled: false
+    base_url: http://127.0.0.1:8080   # TurboQuant server 地址
+    glm_model: glm-ocr:latest
+    qwen_model: qwen3-vl:latest
+
+  # ── 硅基流动（备选）─────────────────────────────────────
   # 注册送 ¥16免费额度：https://account.siliconflow.cn/zh/login?redirect=https%3A%2F%2Fcloud.siliconflow.cn&invitation=wV34tYbt
   siliconflow:
-    api_key: "YOUR_SILICONFLOW_API_KEY"       # 注册后获取
+    api_key: "YOUR_SILICONFLOW_API_KEY"
     base_url: https://api.siliconflow.cn/v1
     vision_model: "Pro/PaddleOCR-VL-1.5"
     text_model: "Pro/deepseek-ai/DeepSeek-V3.2"
 
-  # ── 本地 Ollama（完全免费，需提前安装）───────────────────
-  # 安装：brew install ollama && ollama pull qwen3-vl:30b
-  ollama:
-    base_url: http://127.0.0.1:11434
-    model: qwen3-vl:30b
-
-  # ── 本地 PaddleOCR（完全免费，无需网络）─────────────────
-  # pip install paddlepaddle paddleocr
+  # ── 本地 PaddleOCR（最终兜底）───────────────────────────
   paddleocr:
     enabled: true
 
@@ -55,7 +66,6 @@ email:
   password: YOUR_APP_PASSWORD
   folder: INBOX
   download_dir: ~/Documents/发票夹子/inbox
-  # 智能识别邮件中的发票链接（自动识别，无需配置域名）
   auto_follow_links: true
 
 # ============================================================

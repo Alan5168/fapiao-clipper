@@ -1,213 +1,123 @@
 """
-发票识别模块
+发票识别器 v1.1
 
-架构（两级 + 本地兜底）：
-  第1级  Python 正则  → 免费，数字 PDF 直接出字段
-  第2级  Ollama GLM-OCR（轻量~4GB） → 图片/扫描件
-  第3级  Ollama Qwen3-VL（兜底）   → GLM-OCR 失败时
+四级降级链路：
+  第1级  PDF 文本提取  → PyMuPDF / pdfplumber（可搜索 PDF 直接读文字）
+  第2级  Ollama GLM-OCR（本地）→ 图片/扫描件，零 API 成本
+  第3级  TurboQuant Ollama（可选）→ 32GB 内存优化，KV Cache 压缩 4-5x
+  第4级  Ollama Qwen3-VL（最终 fallback）→ 释放资源
 
-说明：
-  大部分发票（数字 PDF）第1级搞定，零成本。
-  只有扫描件/照片才走第2/3级。
+配置示例（config.yaml）：
+  ocr:
+    ollama:
+      base_url: http://127.0.0.1:11434
+      glm_model: glm-ocr:latest
+      qwen_model: qwen3-vl:latest
+    turboquant:
+      enabled: true
+      base_url: http://127.0.0.1:8080   # TurboQuant server（TheTom/llama-cpp-turboquant fork）
+      glm_model: glm-ocr:latest
+      qwen_model: qwen3-vl:latest
 """
-
-import base64
-import json
 import logging
-import re
 from pathlib import Path
 from typing import Optional
 
+from .engines import PdfTextEngine, OllamaVisionEngine, BaseEngine, EngineResult
+
 logger = logging.getLogger(__name__)
-
-VISION_PROMPT = """请识别这张发票图片，提取关键字段并以 JSON 格式返回：
-{
-  "invoice_number": "发票号码（右上角）",
-  "invoice_code": "发票代码",
-  "date": "开票日期，格式 YYYY-MM-DD",
-  "amount": 不含税金额（金额小写）,
-  "amount_with_tax": 价税合计（发票上最大的金额，等于不含税金额+税额，通常在右下角或合计栏）,
-  "tax": 税额（单独的一行，通常比价税合计小很多）,
-  "seller": "销售方名称",
-  "buyer": "购买方名称",
-  "category": "餐饮/交通/住宿/办公/服务/商品/其他",
-  "invoice_type": "发票类型"
-}
-
-【重要】区分金额字段：
-- amount_with_tax（价税合计）= 发票上最大的金额，是最终要付的钱
-- tax（税额）= 单独列出的税金，通常比价税合计小很多
-- amount（不含税金额）= 价税合计 - 税额
-
-只返回 JSON，不要解释。"""
-
-
-def _is_valid_result(result: dict) -> bool:
-    if not result:
-        return False
-    return bool(result.get("amount_with_tax") is not None)
-
-
-def _parse_json_safe(text: str) -> Optional[dict]:
-    text = text.strip()
-    for part in text.split("```"):
-        part = part.strip().lstrip("json").strip()
-        try:
-            return json.loads(part)
-        except Exception:
-            pass
-    try:
-        return json.loads(text)
-    except Exception:
-        pass
-    m = re.search(r'\{.*\}', text, re.DOTALL)
-    if m:
-        try:
-            return json.loads(m.group())
-        except Exception:
-            pass
-    return None
-
-
-class BaseVisionEngine:
-    name = "base"
-
-    def __init__(self, config: dict):
-        self.cfg = config
-
-    def is_available(self) -> bool:
-        raise NotImplementedError
-
-    def extract(self, image_bytes: bytes) -> Optional[dict]:
-        raise NotImplementedError
-
-
-class OllamaVisionEngine(BaseVisionEngine):
-    """Ollama 本地视觉模型"""
-
-    def __init__(self, config: dict, model_key: str, model_name: str):
-        super().__init__(config)
-        self.model_key = model_key
-        self.model_name = model_name
-        ocfg = config.get("ocr", {}).get("ollama", {})
-        self.base_url = ocfg.get("base_url", "http://127.0.0.1:11434")
-
-    def is_available(self) -> bool:
-        try:
-            import httpx
-            resp = httpx.get(f"{self.base_url}/api/tags", timeout=5)
-            if resp.status_code != 200:
-                return False
-            available = [m.get("name", "") for m in resp.json().get("models", [])]
-            ok = any(self.model_name.split(":")[0] in m for m in available)
-            if ok:
-                logger.info(f"✅ 第2级视觉引擎: {self.model_name}")
-            return ok
-        except Exception:
-            return False
-
-    def extract(self, image_bytes: bytes) -> Optional[dict]:
-        import httpx
-        b64 = base64.b64encode(image_bytes).decode()
-        payload = {
-            "model": self.model_name,
-            "messages": [{"role": "user", "content": VISION_PROMPT, "images": [b64]}],
-            "stream": False,
-        }
-        resp = httpx.post(f"{self.base_url}/api/chat", json=payload, timeout=60)
-        if resp.status_code != 200:
-            return None
-        content = resp.json().get("message", {}).get("content", "")
-        return _parse_json_safe(content)
 
 
 class InvoiceRecognizer:
-    """两级识别器：正则 → 视觉模型"""
+    """发票识别器（四级降级）"""
 
     def __init__(self, config: dict):
         self.cfg = config
-        ocr_cfg = config.get("ocr", {})
-        self.vision_engines = []
+        self.engines: list[BaseEngine] = []
+        self._build_chain()
+
+    def _build_chain(self):
+        """按优先级构建引擎链"""
+        ocr_cfg = self.cfg.get("ocr", {})
+
+        # === 第1级：PDF 文本提取（始终注册）===
+        self.engines.append(PdfTextEngine())
+
+        # === 第2级：标准 Ollama GLM-OCR ===
         ollama_cfg = ocr_cfg.get("ollama", {})
-        if ollama_cfg:
-            models = ollama_cfg.get("models", [])
-            if not models:
-                models = [("glm_ocr", "glm-ocr:latest"), ("qwen_vl", "qwen3-vl:30b")]
-            for key, name in models:
-                engine = OllamaVisionEngine(config, key, name)
-                if engine.is_available():
-                    self.vision_engines.append(engine)
+        glm_model = ollama_cfg.get("glm_model", "glm-ocr:latest")
+        qwen_model = ollama_cfg.get("qwen_model", "qwen3-vl:latest")
 
-    def recognize(self, pdf_path: Path, raw_text: str = "") -> Optional[dict]:
-        result = self._extract_by_regex(raw_text)
-        if _is_valid_result(result):
-            logger.info("第1级：Python 正则提取成功")
-            return result
-        logger.warning("第1级字段不全，进入第2级")
-        for engine in self.vision_engines:
-            logger.info(f"第2级：{engine.model_name} 视觉识别")
-            try:
-                image_bytes = self._pdf_to_image(pdf_path)
-                if image_bytes:
-                    result = engine.extract(image_bytes)
-                    if _is_valid_result(result):
-                        return result
-            except Exception as e:
-                logger.warning(f"视觉引擎 {engine.name} 失败: {e}")
-        return None
+        glm_engine = OllamaVisionEngine(self.cfg, glm_model)
+        if glm_engine.is_available():
+            self.engines.append(glm_engine)
+            logger.info(f"✅ 注册第2级引擎: {glm_engine.name}")
+        else:
+            logger.warning(f"⚠️ Ollama GLM-OCR 不可用: {glm_model}")
 
-    def _extract_by_regex(self, text: str) -> Optional[dict]:
-        if not text:
-            return None
-        result = {}
-        
-        # 发票号码（20位数字）
-        all_20digits = re.findall(r'\b(\d{20})\b', text)
-        if all_20digits:
-            result["invoice_number"] = all_20digits[0]
-        
-        # 开票日期
-        m = re.search(r'(\d{4}年\d{1,2}月\d{1,2}日)', text)
-        if m:
-            result["date"] = m.group(1)
-        
-        # 提取所有 ¥ 后面的金额
-        amounts = re.findall(r'[¥￥]\s*([0-9,]+\.?\d*)', text)
-        if amounts:
-            amounts = sorted(set([float(a.replace(',', '')) for a in amounts]))
-            if amounts:
-                result["amount_with_tax"] = amounts[-1]  # 最大的是价税合计
-            if len(amounts) >= 2 and amounts[0] < amounts[-1] * 0.2:
-                result["tax"] = amounts[0]  # 最小的是税额
-            if len(amounts) >= 3:
-                for a in amounts:
-                    if a != amounts[0] and a != amounts[-1]:
-                        result["amount"] = a
-                        break
-        
-        # 销售方
-        m = re.search(r'(北京[^有限\s]+有限公司)', text)
-        if not m:
-            m = re.search(r'(陵水[^有限\s]+有限公司)', text)
-        if m:
-            result["seller"] = m.group(1).strip()
-        
-        # 购买方
-        buyers = re.findall(r'(陵水[^有限\s]*有限公司)', text)
-        if buyers:
-            result["buyer"] = buyers[0]
-        
-        return result if result else None
+        # === 第3级：TurboQuant Ollama（可选）===
+        tq_cfg = ocr_cfg.get("turboquant", {})
+        if tq_cfg.get("enabled") and tq_cfg.get("base_url"):
+            tq_glm = OllamaVisionEngine(
+                self.cfg,
+                tq_cfg.get("glm_model", glm_model),
+                turboquant_url=tq_cfg.get("base_url"),
+            )
+            if tq_glm.is_available():
+                self.engines.append(tq_glm)
+                logger.info(f"✅ 注册第3级引擎（TurboQuant）: {tq_glm.name}")
+            else:
+                logger.warning(f"⚠️ TurboQuant server 不可用: {tq_cfg.get('base_url')}")
+        else:
+            logger.info("ℹ️ TurboQuant 未启用（可通 config.yaml 开启）")
 
-    def _pdf_to_image(self, pdf_path: Path) -> Optional[bytes]:
-        try:
-            import fitz
-            doc = fitz.open(str(pdf_path))
-            page = doc[0]
-            pix = page.get_pixmap(dpi=150)
-            img_bytes = pix.tobytes("png")
-            doc.close()
-            return img_bytes
-        except Exception as e:
-            logger.error(f"PDF 转图片失败: {e}")
-            return None
+        # === 第4级：Qwen3-VL fallback ===
+        qwen_engine = OllamaVisionEngine(self.cfg, qwen_model)
+        if qwen_engine.is_available():
+            self.engines.append(qwen_engine)
+            logger.info(f"✅ 注册第4级 fallback 引擎: {qwen_engine.name}")
+        else:
+            logger.warning(f"⚠️ Ollama Qwen3-VL 不可用: {qwen_model}")
+
+        # 按 priority 排序（数字小的在前）
+        self.engines.sort(key=lambda e: e.priority)
+        logger.info(f"📋 引擎链构建完成: {[e.name for e in self.engines]}")
+
+    def recognize(self, file_path: str, raw_text: str = "") -> EngineResult:
+        """
+        对文件执行识别，按引擎链降级。
+
+        Args:
+            file_path: 文件路径（PDF/OFD/图片）
+            raw_text:  已有的原始文本（第1级失败时传入）
+
+        Returns:
+            EngineResult: 包含识别结果、置信度、来源引擎
+        """
+        path = Path(file_path)
+        logger.info(f"开始识别: {path.name}")
+
+        for i, engine in enumerate(self.engines):
+            logger.info(f"尝试第{i+1}级引擎: {engine.name}")
+            result = engine.extract(str(path))
+
+            if result.is_valid:
+                logger.info(f"✅ 第{i+1}级 {engine.name} 识别成功，置信度={result.confidence:.2f}")
+                self._log_result(result)
+                return result
+
+            logger.warning(f"⚠️ 第{i+1}级 {engine.name} 未通过（{result.error or '无效结果'}）")
+
+        # 全部失败
+        logger.error("❌ 所有引擎均失败")
+        return EngineResult(data=None, confidence=0, engine="none", error="所有引擎均失败")
+
+    def recognize_batch(self, file_paths: list[str]) -> list[EngineResult]:
+        """批量识别"""
+        return [self.recognize(fp) for fp in file_paths]
+
+    def _log_result(self, result: EngineResult):
+        """记录识别结果字段"""
+        if result.data:
+            fields = list(result.data.keys())
+            logger.debug(f"识别字段: {fields}")
