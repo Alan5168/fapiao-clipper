@@ -1,573 +1,235 @@
-# 🧾 发票夹子 Invoice Clipper
+# 发票夹子 v1.3.0 🧾
 
-<p align="center">
-  <a href="https://github.com/Alan5168/invoice-clipper/actions/workflows/ci.yml">
-    <img src="https://img.shields.io/github/actions/workflow/status/Alan5168/invoice-clipper/CI?style=for-the-badge" alt="CI">
-  </a>
-  <img src="https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue?style=for-the-badge" alt="Python 3.10+">
-  <img src="https://img.shields.io/badge/license-MIT-green?style=for-the-badge" alt="MIT">
-  <img src="https://img.shields.io/badge/Privacy-First-green?style=for-the-badge" alt="Privacy-First">
-  <img src="https://img.shields.io/badge/Local-LLM-orange?style=for-the-badge" alt="Local-LLM">
-  <img src="https://img.shields.io/badge/TurboQuant-32GB%20优化-9370DB?style=for-the-badge" alt="TurboQuant">
-  <img src="https://img.shields.io/badge/v1.2.0-OpenDataLoader-FF6B6B?style=for-the-badge" alt="v1.2.0">
-</p>
+> 中国发票专用 · 本地 AI 识别 · 3 分钟上手
 
-<h2 align="center">
-  自动扫描邮箱 · 本地大模型识别 · 一键导出报销 Excel + 合并 PDF<br>
-  <sub>支持税务查验 · 内控风控预警 · 发票真实性核验</sub>
-</h2>
+[快速开始](#快速开始) · [功能特性](#功能特性) · [使用示例](#使用示例) · [架构说明](#架构说明)
 
 ---
 
-<p align="center">
-  <a href="#-核心特性">核心特性</a> ·
-  <a href="#-问题背景">问题背景</a> ·
-  <a href="#-快速开始">快速开始</a> ·
-  <a href="#turboquant-内存优化">TurboQuant</a> ·
-  <a href="#-opendataloader-pdf引擎">OpenDataLoader</a> ·
-  <a href="#-使用指南">使用指南</a> ·
-  <a href="#-风控与验真">风控与验真</a> ·
-  <a href="#架构">架构</a>
-</p>
+## 痛点解决 💡
+
+| 场景 | 传统方式 | 发票夹子 |
+|------|---------|---------|
+| 收票 | 手动下载邮箱附件 | 📧 自动扫描下载 |
+| 识别 | 手工录入/云OCR（怕泄露）| 🔒 本地 AI 识别，零上传 |
+| 整理 | Excel 手工统计 | 📊 自动分类+一键导出 |
+| 验真 | 税局网站逐张查 | ✅ 自动验真+风险预警 |
 
 ---
 
-![发票夹子](docs/hero.png)
+## 快速开始 🚀（3 分钟）
 
-## ❓ 问题背景
-
-财务报销中最费时的环节不是贴发票，而是：
-
-| 环节 | 痛点 |
-|------|------|
-| 收票 | 邮箱里收到发票链接，要手动点开下载 |
-| 整理 | PDF/OFD/图片混在一起，格式不统一 |
-| 识别 | 手工录入易错，OCR 云服务有数据泄露风险 |
-| 验真 | 发票真假、是否作废、是否超期，都要上税局网站查 |
-| 报销 | 礼品卡/烟酒发票混进去，财务审完被打回 |
-
-**发票夹子**解决以上全部。
-
----
-
-## ✅ 核心特性
-
-### 📥 智能收票
-- **邮箱链接自动下载**：邮件正文里的发票链接（如国家税务总局查验平台）自动识别并下载附件，无需手动点开
-- **附件扫描**：自动扫描邮箱 INBOX，发现 PDF/OFD 附件直接下载
-- **目录监控**：配置监控文件夹，新发票放入后自动识别
-
-### 🧠 四级识别链（v1.2 新增 OpenDataLoader PDF 引擎）
-- **第1级：PDF 文本提取** → PyMuPDF（默认）或 OpenDataLoader（有序输出+表格结构）
-- **第2级：GLM-OCR（Ollama）** → 图片/扫描件，约 2.2GB，完全本地
-- **第3级：TurboQuant Ollama（可选）** → KV Cache 压缩 4-5x，32GB 机器救星
-- **第4级：Qwen3-VL（最终 fallback）** → 释放资源，不行再换
-- **完全本地**：发票图片永不离开你的电脑，没有隐私泄露风险
-- **OFD格式支持**：国内独有格式完整支持（含电子签章验签）
-
-### 🚨 内控风控预警（v1.3 新增税法合规检查）
-入库即自动检查，发现问题发票**单独列清单**，不混入正常报销：
-
-| 检查项 | 说明 | 状态 |
-|--------|------|------|
-| 禁止报销项 | 礼品卡/烟酒/奢侈品，一经发现标记🚫 | ✅ |
-| 个人抬头发票 | 非差旅/交通/通讯场景提示⚠️ | ✅ |
-| **差旅费进项抵扣** | 火车票/机票个人抬头可进项抵扣（v1.3） | ⏳ |
-| **业务招待费汇总** | 自动计算60%+千5限额（v1.3） | ⏳ |
-| 超期发票 | 超过365天自动预警 | ✅ |
-| 重复报销 | 发票号+金额双重查重 | ✅ |
-| 税务状态 | 作废/红冲/失控自动识别（需接入税局API）| ✅ |
-| 失信主体 | 税务局黑名单本地比对，销售方命中即拦截 | ✅ |
-| **失逃企业检查** | 爬虫各省税务局失联企业公告（v1.3） | ⏳ |
-| 大头小尾 | 票面金额异常检测 | ✅ |
-| 抬头错误 | 企业名称疑似错字提示 | ✅ |
-
-### 📊 一键导出
-- **Excel报销明细**：标准化格式，按日期排序，可直接提交财务
-- **合并PDF**：多张发票合并为一个文件，便于归档
-- **问题发票清单**：单独红色Sheet标注，禁止报销项和警告项分开
-- **业务招待费汇总表**（v1.3）：自动生成招待费扣除限额计算表
-
----
-
-## ⚡ 快速开始
-
-### 环境要求
-- Python 3.10+
-- 推荐：Ollama（含 glm-ocr + qwen3-vl）
-- 可选：TurboQuant server（32GB 以下机器推荐）
-- 可选：OpenDataLoader（需 Java 11）
-
-### 零配置启动（推荐首次使用）
-
-不想编辑 YAML？直接运行配置向导，回答几个问题即可完成配置：
+### 1. 安装（30 秒）
 
 ```bash
-# macOS/Linux
-python3 setup_config.py
+# 克隆仓库
+git clone https://github.com/Alan5168/fapiao-clipper.git
+cd fapiao-clipper
 
-# Windows
-setup.bat
-```
-
-向导会问你：
-1. 📁 发票存放目录在哪？
-2. 📧 要监控邮箱吗？（可选）
-3. 🤖 用哪个识别引擎？（Ollama / TurboQuant / 硅基流动 / PaddleOCR）
-4. 📄 用哪个 PDF 提取引擎？（PyMuPDF / OpenDataLoader）
-5. 🚨 启用失信黑名单吗？
-
-回答完自动生成 `config/config.yaml`，无需手动编辑任何文件。
-
----
-
-### 安装 Ollama
-
-```bash
-# macOS
-brew install ollama
-
-# Linux
-curl -fsSL https://ollama.ai/install.sh | sh
-
-# 拉取模型
-ollama pull glm-ocr:latest    # ~2.2GB，主力 OCR
-ollama pull qwen3-vl:latest   # ~6.1GB，fallback
-
-# 验证
-ollama list
-```
-
----
-
-## ⚡ TurboQuant 内存优化（32GB 以下机器推荐）
-
-> TurboQuant 是 Google 开源的量化技术，可将 GLM-OCR / Qwen3-VL 的 KV Cache 内存压缩 **4-5x**，
-> 让 32GB 机器也能流畅运行发票识别。
-
-### 与标准 Ollama 的区别
-
-| | 标准 Ollama | TurboQuant Ollama |
-|---|---|---|
-| 内存占用 | ~2.2GB（GLM-OCR）| ~500MB（GLM-OCR）|
-| 兼容性 | 官方版本，直接安装 | 需要编译 fork |
-| 速度 | 快 | 略慢（解压开销）|
-| 适用人群 | 64GB+ 机器 | 32GB 以下机器 |
-
-### Build 指引（macOS / Linux）
-
-```bash
-# 1. 克隆 TurboQuant fork
-git clone https://github.com/TheTom/llama-cpp-turboquant.git
-cd llama-cpp-turboquant
-
-# 2. 安装依赖（cmake、gcc、make）
-# macOS:
-brew install cmake go
-
-# 3. 编译 Ollama（TurboQuant 版本）
-# 参考 README.md 的 build 步骤
-go build -o ollama-tq .
-
-# 4. 启动 TurboQuant server（默认 8080 端口）
-./ollama-tq serve
-
-# 5. 在另一个终端拉取模型
-./ollama-tq pull glm-ocr:latest
-./ollama-tq pull qwen3-vl:latest
-```
-
-### 配置发票夹子使用 TurboQuant
-
-```bash
-# 运行配置向导，选择 [2] Ollama + TurboQuant
-python3 setup_config.py
-```
-
-或手动编辑 `config/config.yaml`：
-
-```yaml
-ocr:
-  provider: ollama
-  ollama:
-    base_url: http://127.0.0.1:11434
-    glm_model: glm-ocr:latest
-    qwen_model: qwen3-vl:latest
-  turboquant:
-    enabled: true
-    base_url: http://127.0.0.1:8080   # TurboQuant server 端口
-    glm_model: glm-ocr:latest
-    qwen_model: qwen3-vl:latest
-```
-
-> **注意**：TurboQuant 和标准 Ollama 可以同时运行，互不影响。
-> 发票夹子会在第 3 级自动尝试 TurboQuant，第 2/4 级仍使用标准 Ollama。
-
----
-
-## ⚡ OpenDataLoader PDF 引擎（v1.2 新增）
-
-> OpenDataLoader 是基于 Java 的 PDF 提取引擎，相比 PyMuPDF 提供：
-> - **阅读顺序正确**：XY-Cut++ 算法保证输出顺序符合人类阅读习惯
-> - **表格结构保留**：表格以 Markdown 格式输出，列对齐清晰
-> - **JSON 带坐标**：可选输出带 bounding boxes 的 JSON，用于字段定位验证
-
-### 与 PyMuPDF 的区别
-
-| | PyMuPDF | OpenDataLoader |
-|---|---|---|
-| 速度 | 毫秒级 | 秒级（JVM 启动） |
-| 阅读顺序 | 可能有乱序 | ✅ 正确顺序 |
-| 表格输出 | 纯文本 | ✅ 结构化 Markdown |
-| JSON坐标 | ❌ 不支持 | ✅ 支持 |
-| 依赖 | Python only | 需要 Java 11 |
-
-### 安装 OpenDataLoader
-
-```bash
-# macOS（安装 Java 11）
-brew install openjdk@11
-
-# 安装 opendataloader-pdf
-pip install opendataloader-pdf
-```
-
-### 配置发票夹子使用 OpenDataLoader
-
-```yaml
-pdf_extractor:
-  engine: opendataloader  # 或 pymupdf（默认）
-  
-  opendataloader:
-    # Java 路径（brew 安装后的默认路径）
-    java_home: /opt/homebrew/opt/openjdk@11/libexec/openjdk.jdk/Contents/Home
-    # 批量处理时一次 JVM 启动处理多文件，减少开销
-    batch_size: 10
-    # 是否输出 JSON（带 bounding boxes，用于字段定位验证）
-    include_json: false
-```
-
-### 使用场景建议
-
-| 场景 | 推荐引擎 |
-|------|----------|
-| 大批量处理（>1000张） | PyMuPDF（速度快） |
-| 复杂表格发票（如增值税专票） | OpenDataLoader（表格清晰） |
-| 需要字段坐标定位 | OpenDataLoader（JSON模式） |
-| 无 Java 环境 | PyMuPDF（纯 Python） |
-
----
-
-### 第一步：克隆项目
-
-```bash
-git clone https://github.com/Alan5168/invoice-clipper.git
-cd invoice-clipper
-```
-
-### 第二步：安装依赖
-
-```bash
-# 核心依赖（必须有）
+# 安装依赖
 pip install -r requirements.txt
-
-# 可选：本地 OCR（推荐安装，大幅提升识别率）
-ollama pull glm-ocr:latest
-ollama pull qwen3-vl:latest
-
-# 可选：PaddleOCR 兜底（无 Ollama 时自动启用）
-pip install paddlepaddle paddleocr
-
-# 可选：OpenDataLoader PDF 引擎
-brew install openjdk@11
-pip install opendataloader-pdf
 ```
 
-### 第三步：配置
+### 2. 配置邮箱（1 分钟）
+
+复制模板配置文件：
 
 ```bash
-cp config/config.example.yaml config/config.yaml
-# 用文本编辑器打开 config/config.yaml，填入关键项
+cp config/config.yaml.template config/config.yaml
 ```
 
-### 第四步：运行
+编辑 `config/config.yaml`：
+
+```yaml
+email:
+  imap_server: imap.qq.com        # 你的邮箱 IMAP 服务器
+  username: your_email@qq.com     # 你的邮箱
+  password: your_auth_code        # 授权码（不是邮箱密码）
+  download_dir: ~/Documents/发票夹子/inbox
+```
+
+> 💡 常见邮箱 IMAP 服务器：
+> - QQ 邮箱：imap.qq.com
+> - 163 邮箱：imap.163.com
+> - Gmail：imap.gmail.com
+
+### 3. 运行（1 分钟）
 
 ```bash
-# 扫描邮箱和本地文件夹，处理新发票
+# 扫描邮箱和本地目录
 python3 main.py scan
 
-# 列出所有已入库发票
+# 查看已识别发票
 python3 main.py list
 
-# 验真所有发票（税务状态+风控检查）
-python3 main.py verify
-
-# 查看问题发票清单
-python3 main.py problems
-
-# 导出报销（自动同时生成问题发票清单）
-python3 main.py export --from 2026-03-01 --to 2026-03-31 --format both
-
-# 导出业务招待费汇总表（v1.3 新增）
-python3 main.py export-entertainment --from 2026-01-01 --to 2026-03-31
+# 导出报销单（Excel + 合并 PDF）
+python3 main.py export --format both
 ```
+
+🎉 完成！报销文件已生成在 `~/Documents/发票夹子/exports/`。
 
 ---
 
-## 📖 使用指南
+## 功能特性 ✨
 
-### 命令总览
+### 🧠 智能识别（本地 AI）
 
-| 命令 | 说明 | 版本 |
-|------|------|------|
-| `scan` | 扫描邮箱和监控目录，处理新发票 | v1.0 |
-| `list` | 列出所有已入库发票 | v1.0 |
-| `query --from X --to Y` | 按日期范围查询发票 | v1.0 |
-| `verify [--days N]` | 批量验真（税务状态+风控），默认365天内有效 | v1.0 |
-| `problems` | 查看问题发票清单（含禁止/警告原因）| v1.0 |
-| `export --format both` | 导出报销Excel+合并PDF，自动附问题清单 | v1.0 |
-| `export-entertainment` | 导出业务招待费汇总+限额计算 | v1.3 |
-| `exclude <ID>` | 手动标记发票为不可报销 | v1.0 |
-| `include <ID>` | 恢复发票为可报销 | v1.0 |
-| `process <file>` | 处理单个文件 | v1.0 |
+**二级识别引擎**：
 
-### 发货票链接自动下载
+1. **PyMuPDF 文本提取**（毫秒级）
+   - 支持可搜索 PDF 直接提取文字
+   - 修复跨行匹配问题（seller/buyer 不再写反）
+   - 日期统一标准化为 `YYYY-MM-DD`
 
-配置 `auto_follow_links: true` 后，发票夹子会：
+2. **Qwen3-VL 视觉模型**（备用，~60s）
+   - 扫描件/图片发票识别
+   - 复杂布局智能解析
+   - 本地运行，零数据上传
 
-1. 读取邮件正文
-2. 识别 `verify.tax`、`inv.verify` 等信任域名下的链接
-3. 自动下载并识别
-4. **入库后立即验真**，有问题立刻标记
+> 🔒 **隐私安全**：所有识别都在本地完成，发票数据不上传任何云服务。
 
-### OFD 电子发票处理
+### 📧 自动收票
 
-国内新版电子发票多为 OFD 格式（如数电票）。发票夹子：
-- 自动转换为 PDF 进行识别
-- 验证电子签章是否有效（未被篡改）
-- 原始 OFD 文件归档保留
+- **邮箱扫描**：自动登录 IMAP 邮箱，下载发票 PDF/OFD 附件
+- **链接解析**：识别邮件正文中的发票下载链接，自动抓取
+- **目录监控**：指定文件夹监控，新发票自动入库
 
----
+### 🔍 智能验真
 
-## 🚨 风控与验真
+自动对接国家税务总局查验平台：
 
-### 发票分级标准
+- ✅ 发票真伪验证
+- ✅ 发票状态（正常/作废/红冲）
+- ✅ 开票日期合规检查（超 365 天预警）
+- ✅ 重复报销检测
 
-```
-🟢 正常   — 所有检查通过，可直接报销
-🟡 警告   — 需要人工确认（如个人抬头发票）
-🔴 禁止   — 不能报销（如礼品卡/超期/重复）
-```
-
-### 禁止报销项目
-
-以下发票一经发现，标记为禁止报销，不允许混入报销单：
-- 🎁 礼品、购物卡、储值卡
-- 🍷 烟、酒（茅台/五粮液等）
-- 👜 奢侈品（爱马仕/LV/Gucci等）
-- 🏌️ 高尔夫、美容、SPA 等
-
-### 个人抬头发票处理规则（v1.3 新增）
-
-根据《企业所得税法实施条例》规定：
-
-| 发票类型 | 抬头类型 | 企业所得税扣除 | 进项税抵扣 |
-|----------|----------|----------------|-----------|
-| 普通消费发票 | 个人 | ❌ 不能扣除 | ❌ 不能抵扣 |
-| 火车票 | 个人 | ✅ 差旅费扣除 | ✅ 9%抵扣 |
-| 机票行程单 | 个人 | ✅ 差旅费扣除 | ✅ 9%+燃油抵扣 |
-| 长途客运票 | 个人 | ✅ 差旅费扣除 | ✅ 9%抵扣 |
-| 出租车票 | 个人 | ✅ 差旅费扣除 | ❌ 不能抵扣 |
-
-发票夹子会自动识别发票类型，正确处理个人抬头发票。
-
-### 业务招待费扣除限额（v1.3 新增）
-
-根据《企业所得税法实施条例》第43条规定：
-
-```
-扣除限额 = min(实际招待费 × 60%, 年度销售收入 × 5‰)
-```
-
-**示例**：
-| 年度收入 | 实际招待费 | 60%限额 | 5‰限额 | 可扣除额 | 不得扣除 |
-|----------|-----------|---------|--------|----------|----------|
-| 1000万 | 10万 | 6万 | 5万 | **5万** | 5万 |
-| 1000万 | 5万 | 3万 | 5万 | **3万** | 2万 |
-
-发票夹子会自动：
-1. 按发票分类汇总业务招待费总额
-2. 计算税前扣除限额
-3. 导出招待费汇总表（含不得扣除金额）
-
-### 失逃企业检查（v1.3 规划）
-
-除了失信主体（重大税收违法案件），还需检查"失逃企业"（财务负责人失联）：
-
-| 检查类型 | 数据来源 | 实现状态 |
-|----------|----------|----------|
-| 失信主体 | 国家税务总局每月公布 | ✅ 已实现 |
-| 失逃企业 | 各省税务局公告 | ⏳ 规划中 |
-
-**失逃企业检查方案**（v1.3 规划）：
-- 爬虫重点省份：广东、浙江、江苏、上海、北京（企业密集）
-- 数据更新频率：每季度
-- 检查方式：销售方税号精确匹配
-
-### 超期说明
-
-发票有效期默认365天（可配置）。超期发票需附特殊说明方可报销。
-
-### 税务查验接口
-
-目前支持：
-- ✅ 本地风控检查（即时生效，无需配置）
-- ⏳ 税局查验平台 API（需接入企业内部平台，接口框架已预留）
-
----
-
-## 🏗 架构
-
-```
-发票夹子/
-├── main.py                    # CLI 入口
-├── setup_config.py            # 交互式配置向导 (v1.2)
-├── invoice_clipper/
-│   ├── engines/              # v1.2 新增：识别引擎模块
-│   │   ├── __init__.py
-│   │   ├── base.py           # 引擎抽象基类
-│   │   ├── pdf_text.py       # 第1级：PyMuPDF PDF 文本提取
-│   │   ├── pdf_odl.py        # v1.2：OpenDataLoader PDF 提取
-│   │   └── ollama_vision.py # 第2-4级：Ollama/TurboQuant/Qwen3-VL
-│   ├── recognizer.py         # 四级识别链调度器
-│   ├── verifier.py           # 🚨 风控验真模块（含税法合规）
-│   ├── tax_compliance.py     # v1.3：税法合规计算（招待费限额等）
-│   ├── entertainment.py      # v1.3：业务招待费汇总导出
-│   ├── database.py           # SQLite 存储（含验真字段）
-│   ├── exporter.py           # Excel/PDF 导出（含问题发票清单）
-│   ├── blacklist.py          # 失信主体黑名单本地比对
-│   ├── missing_enterprise.py # v1.3：失逃企业检查（爬虫）
-│   ├── email_watcher.py      # 邮箱监控（含链接识别下载）
-│   └── file_processor.py     # PDF/OFD 处理
-└── config/
-    └── config.example.yaml   # 配置示例（含 opendataloader 节）
-```
-
-### 四级识别链路（v1.2）
-
-```
-发票文件
-    │
-    ▼
-┌─────────────────────────┐
-│ 第1级：PDF 文本提取       │  ← PyMuPDF（默认）或 OpenDataLoader
-│ 可搜索 PDF → 直接读文字    │    PyMuPDF: 毫秒级，纯 Python
-│                          │    OpenDataLoader: 有序输出，表格结构
-│ 失败 →                   │
-└────────────┬────────────┘
-             ▼
-┌─────────────────────────┐
-│ 第2级：GLM-OCR (Ollama) │  ← ~2.2GB，本地推理
-│ 图片/扫描件 → JSON 字段   │    零 API 成本
-│ 失败/低置信度 →          │
-└────────────┬────────────┘
-             ▼
-┌─────────────────────────┐
-│ 第3级：TurboQuant Ollama │  ← KV Cache 压缩 4-5x
-│ 可选，32GB 机器推荐       │    约 ~500MB GLM-OCR
-│ 失败 →                   │
-└────────────┬────────────┘
-             ▼
-┌─────────────────────────┐
-│ 第4级：Qwen3-VL (Ollama)│  ← ~6.1GB，最终 fallback
-│ 释放资源，立即调用        │    不用 DeepSeek
-└────────────┬────────────┘
-             ▼
-          发票数据库
-```
-
-### 失信主体黑名单（本地比对）
-
-每月15日自动同步国家税务总局失信主体数据，支持：
+### 📊 一键导出
 
 ```bash
-# 同步最新黑名单（默认上月数据）
-python3 main.py blacklist-sync
+# 导出 Excel 明细表 + 合并 PDF
+python3 main.py export --format both
 
-# 查看本地黑名单统计
-python3 main.py blacklist-stats
-
-# 每次 scan 时自动比对，无需额外命令
+# 按日期筛选
+python3 main.py export --from 2024-01-01 --to 2024-03-31
 ```
 
-报销时自动检查：**销售方税号精确匹配** → 拦截；**企业名称模糊匹配** → 拦截。
-
-数据来源：国家税务总局"重大税收违法失信案件信息公布栏"（每月15日更新，无 API Key 依赖，纯本地开源）
-
----
-
-## 🔐 隐私与安全
-
-| 数据 | 处理方式 |
-|------|---------|
-| 发票图片 | 仅本地处理，不上传任何云端 |
-| 文本数据 | 仅第1级传给阿里百炼（可选，关闭则纯本地） |
-| 财务数据 | 存储在本地 SQLite，不上云 |
-| 邮箱密码 | 仅存储在本地配置文件 |
+导出文件：
+- `报销明细_YYYYMMDD.xlsx`：含发票号码、日期、金额、销售方等字段
+- `报销发票_YYYYMMDD.pdf`：所有发票合并为一个 PDF，方便打印
 
 ---
 
-## 🐳 Docker 部署
+## 使用示例 💻
+
+### 场景 1：月末集中报销
 
 ```bash
-# 克隆后一条命令启动
-docker-compose up
+# 1. 扫描邮箱和监控目录，自动下载新发票
+python3 main.py scan
+
+# 2. 查看本月发票统计
+python3 main.py list
+
+# 3. 导出本月的报销单
+python3 main.py export --from 2024-03-01 --to 2024-03-31 --format both
+
+# 4. 生成的文件在 ~/Documents/发票夹子/exports/，直接发给财务
 ```
 
-容器已包含 PaddleOCR，无需配置 Ollama。
+### 场景 2：单张发票识别
+
+```bash
+# 处理单张发票（测试或补录）
+python3 main.py process /path/to/发票.pdf
+
+# 输出示例：
+# ✅ 处理成功：北京某某科技有限公司 | ¥1,250.00
+```
+
+### 场景 3：排除非发票文件
+
+```bash
+# 查看所有发票（包括已标记不报销的）
+python3 main.py list --all
+
+# 标记某张发票不报销（如个人消费）
+python3 main.py exclude 123
+
+# 恢复报销
+python3 main.py include 123
+```
 
 ---
 
-## 🌐 English README
+## 架构说明 🏗️
 
-*For international users, see [README.en.md](README.en.md) for the English version.*
-
----
-
-## 📝 更新日志
-
-### v1.2.0 (2026-03-31)
-- ✨ 新增 OpenDataLoader PDF 引擎（有序输出+表格结构+JSON坐标）
-- ✨ PDF 引擎可在 config 中一键切换（pymupdf / opendataloader）
-- 🔧 配置向导新增 PDF 引擎选项
-- 📝 README 新增 OpenDataLoader 章节
-
-### v1.3.0 (规划中)
-- ⏳ 差旅费发票进项税抵扣自动识别（火车票/机票）
-- ⏳ 业务招待费汇总导出（60% + 千5 限额计算）
-- ⏳ 失逃企业检查（各省税务局公告爬虫）
-
-### v1.1.0 (2026-03-28)
-- ✨ 新增四级识别链（PDF文本 → GLM-OCR → TurboQuant → Qwen3-VL）
-- ✨ TurboQuant 内存优化（32GB 机器救星）
-- 🔧 配置向导交互式配置
-
-### v1.0.0 (2026-03-15)
-- 🎉 首次发布
-- ✅ 邮箱自动扫描+附件下载
-- ✅ 本地 OCR 识别（GLM-OCR）
-- ✅ 内控风控预警
-- ✅ 失信主体黑名单
-- ✅ Excel/PDF 导出
-
----
-
-## 🤝 贡献
-
-欢迎提交 Issue 和 Pull Request！
+```
+发票夹子 v1.3.0 架构
+│
+├─ 输入层
+│  ├─ 邮箱 IMAP 扫描
+│  ├─ 本地目录监控
+│  └─ 单文件处理
+│
+├─ 识别层（本地 AI）
+│  ├─ 第1级：PyMuPDF 文本提取（毫秒级）
+│  │   └─ 修复跨行匹配，日期标准化
+│  └─ 第2级：Qwen3-VL 视觉模型（备用）
+│      └─ 扫描件/复杂布局识别
+│
+├─ 数据处理层
+│  ├─ 字段标准化（日期、金额、名称）
+│  ├─ 重复检测
+│  └─ 验真对接（国家税务总局）
+│
+├─ 存储层
+│  ├─ SQLite 数据库（本地）
+│  └─ PDF 归档（按日期分类）
+│
+└─ 输出层
+   ├─ Excel 明细导出
+   ├─ 合并 PDF 导出
+   └─ 验真报告
+```
 
 ---
 
-## 📄 License
+## 技术栈 🛠️
 
-MIT License · Alan Li · 2026
+- **PDF 处理**：PyMuPDF, pdfplumber
+- **AI 识别**：Ollama (Qwen3-VL)
+- **数据库**：SQLite
+- **导出**：pandas, reportlab
+- **验真**：国家税务总局查验平台
+
+---
+
+## 隐私与安全 🔒
+
+- ✅ **纯本地运行**：所有数据处理都在本机完成
+- ✅ **零数据上传**：发票信息不上传任何云服务
+- ✅ **本地 AI 识别**：Ollama 完全本地部署
+- ✅ **数据库本地存储**：SQLite 文件存储在用户目录
+
+---
+
+## 开源协议 📄
+
+MIT License - 详见 [LICENSE](LICENSE) 文件。
+
+---
+
+## 反馈与支持 💬
+
+- **GitHub Issues**: [提交问题或建议](https://github.com/Alan5168/fapiao-clipper/issues)
+- **小红书**: 关注「财务效率工具」相关话题，分享使用心得
+
+---
+
+<p align="center">
+  发票夹子 · 让报销不再头疼 🧾✨
+</p>
+
+<p align="center">
+  Made with ❤️ for Chinese freelancers & small business owners
+</p>
