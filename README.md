@@ -233,3 +233,81 @@ MIT License - 详见 [LICENSE](LICENSE) 文件。
 <p align="center">
   Made with ❤️ for Chinese freelancers & small business owners
 </p>
+---
+
+## 🦞 ClawHub 一键安装
+
+如果你使用 [OpenClaw](https://openclaw.ai)，可以通过 [ClawHub](https://clawhub.ai) 一键安装：
+
+```bash
+npx clawhub@latest install fapiao-clipper
+```
+
+或直接访问：👉 https://clawhub.ai/skills/fapiao-clipper
+
+---
+
+## 📝 更新日志
+
+### v1.3.0 (2024-04-03)
+- ✨ 简化降级链为 2 级（PyMuPDF → Qwen3-VL）
+- 🐛 修复 seller/buyer 跨行匹配问题
+- 📅 日期统一标准化为 YYYY-MM-DD
+- 📝 适配小红书引流，README 重构
+
+### v1.2.0
+- 新增 OpenDataLoader PDF 引擎
+- 新增 TurboQuant 内存优化支持
+
+### v1.1.0
+- 新增四级降级链路
+- 新增自动验真功能
+
+### v1.0.0
+- 初始版本发布
+
+---
+
+## 🤝 参与贡献
+
+欢迎提交 Issue 和 PR！
+
+1. Fork 本仓库
+2. 创建你的特性分支 (`git checkout -b feature/AmazingFeature`)
+3. 提交更改 (`git commit -m 'Add some AmazingFeature'`)
+4. 推送到分支 (`git push origin feature/AmazingFeature`)
+5. 打开 Pull Request
+
+---
+
+## 📊 使用数据
+
+- ⭐ GitHub Stars: [![GitHub stars](https://img.shields.io/github/stars/Alan5168/fapiao-clipper?style=social)](https://github.com/Alan5168/fapiao-clipper/stargazers)
+- 🦞 ClawHub 安装: 即将上线
+- 🌏 主要用户: 自由职业者、小微企业、财务外包
+
+---
+
+## 🔮 路线图
+
+- [ ] 支持更多发票类型（火车票、机票行程单）
+- [ ] 多币种支持（外币发票汇率转换）
+- [ ] 企业微信/钉钉机器人通知
+- [ ] Web 可视化界面
+- [ ] 移动端 App（iOS/Android）
+
+---
+
+<p align="center">
+  <b>发票夹子 · 让报销不再头疼 🧾✨</b>
+</p>
+
+<p align="center">
+  Made with ❤️ by Alan Li | 中国自由职业者 & 小微企业的财务效率工具
+</p>
+
+<p align="center">
+  <a href="https://github.com/Alan5168/fapiao-clipper">GitHub</a> •
+  <a href="https://clawhub.ai/skills/fapiao-clipper">ClawHub</a> •
+  <a href="https://www.xiaohongshu.com">小红书</a>
+</p>
