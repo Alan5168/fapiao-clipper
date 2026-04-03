@@ -3,6 +3,10 @@ from dataclasses import dataclass
 from typing import Optional
 
 
+# 置信度阈值：低于此值视为无效，触发降级
+CONFIDENCE_THRESHOLD = 0.6
+
+
 @dataclass
 class EngineResult:
     """识别结果"""
@@ -14,7 +18,16 @@ class EngineResult:
 
     @property
     def is_valid(self) -> bool:
-        return self.data is not None and self.confidence > 0
+        """
+        判断结果是否有效
+        
+        规则：
+        1. data 不能为 None
+        2. confidence >= CONFIDENCE_THRESHOLD (0.6)
+        
+        如果 confidence < 0.6，说明关键字段缺失，应触发降级
+        """
+        return self.data is not None and self.confidence >= CONFIDENCE_THRESHOLD
 
 
 class BaseEngine:

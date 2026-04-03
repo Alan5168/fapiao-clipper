@@ -6,9 +6,10 @@
   </a>
   <img src="https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue?style=for-the-badge" alt="Python 3.10+">
   <img src="https://img.shields.io/badge/license-MIT-green?style=for-the-badge" alt="MIT">
-  <img src="https://img.shields.io/badge/Privacy-First- green?style=for-the-badge" alt="Privacy-First">
+  <img src="https://img.shields.io/badge/Privacy-First-green?style=for-the-badge" alt="Privacy-First">
   <img src="https://img.shields.io/badge/Local-LLM-orange?style=for-the-badge" alt="Local-LLM">
   <img src="https://img.shields.io/badge/TurboQuant-32GB%20优化-9370DB?style=for-the-badge" alt="TurboQuant">
+  <img src="https://img.shields.io/badge/v1.2.0-OpenDataLoader-FF6B6B?style=for-the-badge" alt="v1.2.0">
 </p>
 
 <h2 align="center">
@@ -23,6 +24,7 @@
   <a href="#-问题背景">问题背景</a> ·
   <a href="#-快速开始">快速开始</a> ·
   <a href="#turboquant-内存优化">TurboQuant</a> ·
+  <a href="#-opendataloader-pdf引擎">OpenDataLoader</a> ·
   <a href="#-使用指南">使用指南</a> ·
   <a href="#-风控与验真">风控与验真</a> ·
   <a href="#架构">架构</a>
@@ -55,32 +57,36 @@
 - **附件扫描**：自动扫描邮箱 INBOX，发现 PDF/OFD 附件直接下载
 - **目录监控**：配置监控文件夹，新发票放入后自动识别
 
-### 🧠 四级识别链（v1.1 新增 PDF 文本提取）
-- **第1级：PDF 文本提取** → PyMuPDF / pdfplumber，可搜索 PDF 直接读文字，零成本
+### 🧠 四级识别链（v1.2 新增 OpenDataLoader PDF 引擎）
+- **第1级：PDF 文本提取** → PyMuPDF（默认）或 OpenDataLoader（有序输出+表格结构）
 - **第2级：GLM-OCR（Ollama）** → 图片/扫描件，约 2.2GB，完全本地
 - **第3级：TurboQuant Ollama（可选）** → KV Cache 压缩 4-5x，32GB 机器救星
 - **第4级：Qwen3-VL（最终 fallback）** → 释放资源，不行再换
 - **完全本地**：发票图片永不离开你的电脑，没有隐私泄露风险
 - **OFD格式支持**：国内独有格式完整支持（含电子签章验签）
 
-### 🚨 内控风控预警
+### 🚨 内控风控预警（v1.3 新增税法合规检查）
 入库即自动检查，发现问题发票**单独列清单**，不混入正常报销：
 
-| 检查项 | 说明 |
-|--------|------|
-| 禁止报销项 | 礼品卡/烟酒/奢侈品，一经发现标记🚫 |
-| 个人抬头发票 | 非差旅/交通/通讯场景提示⚠️ |
-| 超期发票 | 超过365天自动预警 |
-| 重复报销 | 发票号+金额双重查重 |
-| 税务状态 | 作废/红冲/失控自动识别（需接入税局API）|
-| 失信主体 | 税务局黑名单本地比对，销售方命中即拦截 |
-| 大头小尾 | 票面金额异常检测 |
-| 抬头错误 | 企业名称疑似错字提示 |
+| 检查项 | 说明 | 状态 |
+|--------|------|------|
+| 禁止报销项 | 礼品卡/烟酒/奢侈品，一经发现标记🚫 | ✅ |
+| 个人抬头发票 | 非差旅/交通/通讯场景提示⚠️ | ✅ |
+| **差旅费进项抵扣** | 火车票/机票个人抬头可进项抵扣（v1.3） | ⏳ |
+| **业务招待费汇总** | 自动计算60%+千5限额（v1.3） | ⏳ |
+| 超期发票 | 超过365天自动预警 | ✅ |
+| 重复报销 | 发票号+金额双重查重 | ✅ |
+| 税务状态 | 作废/红冲/失控自动识别（需接入税局API）| ✅ |
+| 失信主体 | 税务局黑名单本地比对，销售方命中即拦截 | ✅ |
+| **失逃企业检查** | 爬虫各省税务局失联企业公告（v1.3） | ⏳ |
+| 大头小尾 | 票面金额异常检测 | ✅ |
+| 抬头错误 | 企业名称疑似错字提示 | ✅ |
 
 ### 📊 一键导出
 - **Excel报销明细**：标准化格式，按日期排序，可直接提交财务
 - **合并PDF**：多张发票合并为一个文件，便于归档
 - **问题发票清单**：单独红色Sheet标注，禁止报销项和警告项分开
+- **业务招待费汇总表**（v1.3）：自动生成招待费扣除限额计算表
 
 ---
 
@@ -90,6 +96,7 @@
 - Python 3.10+
 - 推荐：Ollama（含 glm-ocr + qwen3-vl）
 - 可选：TurboQuant server（32GB 以下机器推荐）
+- 可选：OpenDataLoader（需 Java 11）
 
 ### 零配置启动（推荐首次使用）
 
@@ -107,7 +114,8 @@ setup.bat
 1. 📁 发票存放目录在哪？
 2. 📧 要监控邮箱吗？（可选）
 3. 🤖 用哪个识别引擎？（Ollama / TurboQuant / 硅基流动 / PaddleOCR）
-4. 🚨 启用失信黑名单吗？
+4. 📄 用哪个 PDF 提取引擎？（PyMuPDF / OpenDataLoader）
+5. 🚨 启用失信黑名单吗？
 
 回答完自动生成 `config/config.yaml`，无需手动编辑任何文件。
 
@@ -197,6 +205,59 @@ ocr:
 
 ---
 
+## ⚡ OpenDataLoader PDF 引擎（v1.2 新增）
+
+> OpenDataLoader 是基于 Java 的 PDF 提取引擎，相比 PyMuPDF 提供：
+> - **阅读顺序正确**：XY-Cut++ 算法保证输出顺序符合人类阅读习惯
+> - **表格结构保留**：表格以 Markdown 格式输出，列对齐清晰
+> - **JSON 带坐标**：可选输出带 bounding boxes 的 JSON，用于字段定位验证
+
+### 与 PyMuPDF 的区别
+
+| | PyMuPDF | OpenDataLoader |
+|---|---|---|
+| 速度 | 毫秒级 | 秒级（JVM 启动） |
+| 阅读顺序 | 可能有乱序 | ✅ 正确顺序 |
+| 表格输出 | 纯文本 | ✅ 结构化 Markdown |
+| JSON坐标 | ❌ 不支持 | ✅ 支持 |
+| 依赖 | Python only | 需要 Java 11 |
+
+### 安装 OpenDataLoader
+
+```bash
+# macOS（安装 Java 11）
+brew install openjdk@11
+
+# 安装 opendataloader-pdf
+pip install opendataloader-pdf
+```
+
+### 配置发票夹子使用 OpenDataLoader
+
+```yaml
+pdf_extractor:
+  engine: opendataloader  # 或 pymupdf（默认）
+  
+  opendataloader:
+    # Java 路径（brew 安装后的默认路径）
+    java_home: /opt/homebrew/opt/openjdk@11/libexec/openjdk.jdk/Contents/Home
+    # 批量处理时一次 JVM 启动处理多文件，减少开销
+    batch_size: 10
+    # 是否输出 JSON（带 bounding boxes，用于字段定位验证）
+    include_json: false
+```
+
+### 使用场景建议
+
+| 场景 | 推荐引擎 |
+|------|----------|
+| 大批量处理（>1000张） | PyMuPDF（速度快） |
+| 复杂表格发票（如增值税专票） | OpenDataLoader（表格清晰） |
+| 需要字段坐标定位 | OpenDataLoader（JSON模式） |
+| 无 Java 环境 | PyMuPDF（纯 Python） |
+
+---
+
 ### 第一步：克隆项目
 
 ```bash
@@ -216,6 +277,10 @@ ollama pull qwen3-vl:latest
 
 # 可选：PaddleOCR 兜底（无 Ollama 时自动启用）
 pip install paddlepaddle paddleocr
+
+# 可选：OpenDataLoader PDF 引擎
+brew install openjdk@11
+pip install opendataloader-pdf
 ```
 
 ### 第三步：配置
@@ -242,6 +307,9 @@ python3 main.py problems
 
 # 导出报销（自动同时生成问题发票清单）
 python3 main.py export --from 2026-03-01 --to 2026-03-31 --format both
+
+# 导出业务招待费汇总表（v1.3 新增）
+python3 main.py export-entertainment --from 2026-01-01 --to 2026-03-31
 ```
 
 ---
@@ -250,17 +318,18 @@ python3 main.py export --from 2026-03-01 --to 2026-03-31 --format both
 
 ### 命令总览
 
-| 命令 | 说明 |
-|------|------|
-| `scan` | 扫描邮箱和监控目录，处理新发票 |
-| `list` | 列出所有已入库发票 |
-| `query --from X --to Y` | 按日期范围查询发票 |
-| `verify [--days N]` | 批量验真（税务状态+风控），默认365天内有效 |
-| `problems` | 查看问题发票清单（含禁止/警告原因）|
-| `export --format both` | 导出报销Excel+合并PDF，自动附问题清单 |
-| `exclude <ID>` | 手动标记发票为不可报销 |
-| `include <ID>` | 恢复发票为可报销 |
-| `process <file>` | 处理单个文件 |
+| 命令 | 说明 | 版本 |
+|------|------|------|
+| `scan` | 扫描邮箱和监控目录，处理新发票 | v1.0 |
+| `list` | 列出所有已入库发票 | v1.0 |
+| `query --from X --to Y` | 按日期范围查询发票 | v1.0 |
+| `verify [--days N]` | 批量验真（税务状态+风控），默认365天内有效 | v1.0 |
+| `problems` | 查看问题发票清单（含禁止/警告原因）| v1.0 |
+| `export --format both` | 导出报销Excel+合并PDF，自动附问题清单 | v1.0 |
+| `export-entertainment` | 导出业务招待费汇总+限额计算 | v1.3 |
+| `exclude <ID>` | 手动标记发票为不可报销 | v1.0 |
+| `include <ID>` | 恢复发票为可报销 | v1.0 |
+| `process <file>` | 处理单个文件 | v1.0 |
 
 ### 发货票链接自动下载
 
@@ -298,6 +367,53 @@ python3 main.py export --from 2026-03-01 --to 2026-03-31 --format both
 - 👜 奢侈品（爱马仕/LV/Gucci等）
 - 🏌️ 高尔夫、美容、SPA 等
 
+### 个人抬头发票处理规则（v1.3 新增）
+
+根据《企业所得税法实施条例》规定：
+
+| 发票类型 | 抬头类型 | 企业所得税扣除 | 进项税抵扣 |
+|----------|----------|----------------|-----------|
+| 普通消费发票 | 个人 | ❌ 不能扣除 | ❌ 不能抵扣 |
+| 火车票 | 个人 | ✅ 差旅费扣除 | ✅ 9%抵扣 |
+| 机票行程单 | 个人 | ✅ 差旅费扣除 | ✅ 9%+燃油抵扣 |
+| 长途客运票 | 个人 | ✅ 差旅费扣除 | ✅ 9%抵扣 |
+| 出租车票 | 个人 | ✅ 差旅费扣除 | ❌ 不能抵扣 |
+
+发票夹子会自动识别发票类型，正确处理个人抬头发票。
+
+### 业务招待费扣除限额（v1.3 新增）
+
+根据《企业所得税法实施条例》第43条规定：
+
+```
+扣除限额 = min(实际招待费 × 60%, 年度销售收入 × 5‰)
+```
+
+**示例**：
+| 年度收入 | 实际招待费 | 60%限额 | 5‰限额 | 可扣除额 | 不得扣除 |
+|----------|-----------|---------|--------|----------|----------|
+| 1000万 | 10万 | 6万 | 5万 | **5万** | 5万 |
+| 1000万 | 5万 | 3万 | 5万 | **3万** | 2万 |
+
+发票夹子会自动：
+1. 按发票分类汇总业务招待费总额
+2. 计算税前扣除限额
+3. 导出招待费汇总表（含不得扣除金额）
+
+### 失逃企业检查（v1.3 规划）
+
+除了失信主体（重大税收违法案件），还需检查"失逃企业"（财务负责人失联）：
+
+| 检查类型 | 数据来源 | 实现状态 |
+|----------|----------|----------|
+| 失信主体 | 国家税务总局每月公布 | ✅ 已实现 |
+| 失逃企业 | 各省税务局公告 | ⏳ 规划中 |
+
+**失逃企业检查方案**（v1.3 规划）：
+- 爬虫重点省份：广东、浙江、江苏、上海、北京（企业密集）
+- 数据更新频率：每季度
+- 检查方式：销售方税号精确匹配
+
 ### 超期说明
 
 发票有效期默认365天（可配置）。超期发票需附特殊说明方可报销。
@@ -315,32 +431,38 @@ python3 main.py export --from 2026-03-01 --to 2026-03-31 --format both
 ```
 发票夹子/
 ├── main.py                    # CLI 入口
-├── setup_config.py            # 交互式配置向导 (v1.1)
+├── setup_config.py            # 交互式配置向导 (v1.2)
 ├── invoice_clipper/
-│   ├── engines/              # v1.1 新增：识别引擎模块
+│   ├── engines/              # v1.2 新增：识别引擎模块
 │   │   ├── __init__.py
 │   │   ├── base.py           # 引擎抽象基类
-│   │   ├── pdf_text.py      # 第1级：PDF 文本提取
+│   │   ├── pdf_text.py       # 第1级：PyMuPDF PDF 文本提取
+│   │   ├── pdf_odl.py        # v1.2：OpenDataLoader PDF 提取
 │   │   └── ollama_vision.py # 第2-4级：Ollama/TurboQuant/Qwen3-VL
 │   ├── recognizer.py         # 四级识别链调度器
-│   ├── verifier.py           # 🚨 风控验真模块
+│   ├── verifier.py           # 🚨 风控验真模块（含税法合规）
+│   ├── tax_compliance.py     # v1.3：税法合规计算（招待费限额等）
+│   ├── entertainment.py      # v1.3：业务招待费汇总导出
 │   ├── database.py           # SQLite 存储（含验真字段）
 │   ├── exporter.py           # Excel/PDF 导出（含问题发票清单）
+│   ├── blacklist.py          # 失信主体黑名单本地比对
+│   ├── missing_enterprise.py # v1.3：失逃企业检查（爬虫）
 │   ├── email_watcher.py      # 邮箱监控（含链接识别下载）
 │   └── file_processor.py     # PDF/OFD 处理
 └── config/
-    └── config.example.yaml   # 配置示例（含 turboquant 节）
+    └── config.example.yaml   # 配置示例（含 opendataloader 节）
 ```
 
-### 四级识别链路（v1.1）
+### 四级识别链路（v1.2）
 
 ```
 发票文件
     │
     ▼
 ┌─────────────────────────┐
-│ 第1级：PDF 文本提取       │  ← PyMuPDF / pdfplumber
-│ 可搜索 PDF → 直接读文字    │    完全免费，毫秒级
+│ 第1级：PDF 文本提取       │  ← PyMuPDF（默认）或 OpenDataLoader
+│ 可搜索 PDF → 直接读文字    │    PyMuPDF: 毫秒级，纯 Python
+│                          │    OpenDataLoader: 有序输出，表格结构
 │ 失败 →                   │
 └────────────┬────────────┘
              ▼
@@ -409,6 +531,34 @@ docker-compose up
 ## 🌐 English README
 
 *For international users, see [README.en.md](README.en.md) for the English version.*
+
+---
+
+## 📝 更新日志
+
+### v1.2.0 (2026-03-31)
+- ✨ 新增 OpenDataLoader PDF 引擎（有序输出+表格结构+JSON坐标）
+- ✨ PDF 引擎可在 config 中一键切换（pymupdf / opendataloader）
+- 🔧 配置向导新增 PDF 引擎选项
+- 📝 README 新增 OpenDataLoader 章节
+
+### v1.3.0 (规划中)
+- ⏳ 差旅费发票进项税抵扣自动识别（火车票/机票）
+- ⏳ 业务招待费汇总导出（60% + 千5 限额计算）
+- ⏳ 失逃企业检查（各省税务局公告爬虫）
+
+### v1.1.0 (2026-03-28)
+- ✨ 新增四级识别链（PDF文本 → GLM-OCR → TurboQuant → Qwen3-VL）
+- ✨ TurboQuant 内存优化（32GB 机器救星）
+- 🔧 配置向导交互式配置
+
+### v1.0.0 (2026-03-15)
+- 🎉 首次发布
+- ✅ 邮箱自动扫描+附件下载
+- ✅ 本地 OCR 识别（GLM-OCR）
+- ✅ 内控风控预警
+- ✅ 失信主体黑名单
+- ✅ Excel/PDF 导出
 
 ---
 

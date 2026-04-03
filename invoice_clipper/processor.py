@@ -62,11 +62,14 @@ class InvoiceProcessor:
             raw_text = ""
 
         # AI 识别
-        fields = self.recognizer.recognize(pdf_path, raw_text)
-        if not fields:
+        result = self.recognizer.recognize(pdf_path, raw_text)
+        if not result or not result.is_valid:
             logger.error(f"识别失败: {pdf_path.name}")
             return None
 
+        # 从 EngineResult.data 获取字段
+        fields = result.data
+        
         # 去重检查
         inv_no = fields.get("invoice_number") or ""
         # 修复: 确保 amount 是数字类型

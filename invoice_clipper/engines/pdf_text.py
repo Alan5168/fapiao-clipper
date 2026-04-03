@@ -46,6 +46,11 @@ FIELD_PATTERNS = {
     ],
 }
 
+# 关键字段：缺失时触发降级
+REQUIRED_FIELDS = ["invoice_number", "date", "seller"]
+# 置信度阈值：低于此值触发降级
+CONFIDENCE_THRESHOLD = 0.6
+
 
 def _normalize_date(text: str) -> str:
     """统一日期格式为 YYYY-MM-DD"""
@@ -59,6 +64,64 @@ def _parse_amounts(text: str) -> list:
     """提取所有金额并排序"""
     amounts = re.findall(r'[¥￥]\s*([0-9,]+\.?\d*)', text)
     return sorted(set([float(a.replace(',', '')) for a in amounts if a]))
+
+
+def _extract_seller_buyer(text: str) -> tuple:
+    """
+    提取销售方和购买方名称，支持跨行匹配
+    
+    发票上的格式可能是：
+    销售方名称：北京XX公司
+    或
+    销售方
+    名称：北京XX公司
+    
+    返回: (seller, buyer)
+    """
+    seller = None
+    buyer = None
+    
+    # 清理文本：将多个换行符替换为单个，便于匹配
+    cleaned_text = re.sub(r'\n+', '\n', text)
+    
+    # 策略1：匹配"销售方名称：XXX"（单行或跨行）
+    # 使用 re.DOTALL 让 . 匹配换行符
+    seller_patterns = [
+        r'销售方[\s]*名称[：:]\s*([^\n]{4,100})',
+        r'销售方[：:]\s*([^\n]{4,100})',
+        r'销方[\s]*名称[：:]\s*([^\n]{4,100})',
+        r'销方[：:]\s*([^\n]{4,100})',
+    ]
+    
+    for pattern in seller_patterns:
+        match = re.search(pattern, cleaned_text, re.DOTALL)
+        if match:
+            seller = match.group(1).strip()
+            # 清理可能的换行和多余空格
+            seller = re.sub(r'\s+', ' ', seller)
+            # 限制长度，去掉过长后的乱码
+            if len(seller) > 100:
+                seller = seller[:100]
+            break
+    
+    # 策略2：匹配"购买方名称：XXX"
+    buyer_patterns = [
+        r'购买方[\s]*名称[：:]\s*([^\n]{4,100})',
+        r'购买方[：:]\s*([^\n]{4,100})',
+        r'购方[\s]*名称[：:]\s*([^\n]{4,100})',
+        r'购方[：:]\s*([^\n]{4,100})',
+    ]
+    
+    for pattern in buyer_patterns:
+        match = re.search(pattern, cleaned_text, re.DOTALL)
+        if match:
+            buyer = match.group(1).strip()
+            buyer = re.sub(r'\s+', ' ', buyer)
+            if len(buyer) > 100:
+                buyer = buyer[:100]
+            break
+    
+    return seller, buyer
 
 
 def _extract_fields(text: str) -> Optional[dict]:
@@ -94,13 +157,12 @@ def _extract_fields(text: str) -> Optional[dict]:
                     result["amount"] = a
                     break
 
-    # 销售方 / 购买方（简单名称匹配）
-    seller_m = re.search(r'销售方[名称]*[：:]\s*([^\n]{4,30})', text)
-    if seller_m:
-        result["seller"] = seller_m.group(1).strip()
-    buyer_m = re.search(r'购买方[名称]*[：:]\s*([^\n]{4,30})', text)
-    if buyer_m:
-        result["buyer"] = buyer_m.group(1).strip()
+    # 销售方 / 购买方（使用新的跨行匹配函数）
+    seller, buyer = _extract_seller_buyer(text)
+    if seller:
+        result["seller"] = seller
+    if buyer:
+        result["buyer"] = buyer
 
     # 发票类型
     type_m = re.search(r'发票类型[：:]\s*([^\n]+)', text)
@@ -164,6 +226,32 @@ def _extract_text_pdfplumber(pdf_path: str) -> Optional[str]:
         return None
 
 
+def _calculate_confidence(fields: dict) -> float:
+    """
+    计算置信度，关键字段缺失时降低置信度触发降级
+    
+    规则：
+    1. 基础置信度 = 字段数量 / 5
+    2. 每缺失一个关键字段，置信度 *= 0.6
+    3. 如果关键字段全部缺失，置信度 = 0
+    """
+    # 基础置信度
+    base_confidence = min(1.0, len(fields) / 5.0)
+    
+    # 检查关键字段
+    missing_required = [f for f in REQUIRED_FIELDS if f not in fields or not fields[f]]
+    
+    if len(missing_required) == len(REQUIRED_FIELDS):
+        # 全部关键字段缺失 → 直接返回 0，触发降级
+        return 0.0
+    
+    # 每缺失一个关键字段，置信度 *= 0.6
+    penalty = 0.6 ** len(missing_required)
+    confidence = base_confidence * penalty
+    
+    return confidence
+
+
 class PdfTextEngine(BaseEngine):
     """第1级引擎：PDF 文本提取"""
     name = "pdf_text"
@@ -193,9 +281,21 @@ class PdfTextEngine(BaseEngine):
         if not fields:
             return EngineResult(data=None, confidence=0, engine=self.name, raw_text=raw)
 
-        # 简单置信度评估：字段越多越可信
-        confidence = min(1.0, len(fields) / 5.0)
-        logger.info(f"第1级 PDF 文本提取成功，置信度={confidence:.2f}，字段={list(fields.keys())}")
+        # 关键字段置信度计算
+        confidence = _calculate_confidence(fields)
+        
+        # 检查缺失的关键字段
+        missing_required = [f for f in REQUIRED_FIELDS if f not in fields or not fields[f]]
+        
+        if confidence < CONFIDENCE_THRESHOLD:
+            logger.warning(
+                f"⚠️ 第1级 PDF 文本提取置信度过低 ({confidence:.2f} < {CONFIDENCE_THRESHOLD})，"
+                f"缺失关键字段: {missing_required}，将触发降级到视觉模型"
+            )
+            # 返回低置信度结果，触发降级
+            return EngineResult(data=fields, confidence=confidence, engine=self.name, raw_text=raw)
+        
+        logger.info(f"✅ 第1级 PDF 文本提取成功，置信度={confidence:.2f}，字段={list(fields.keys())}")
 
         return EngineResult(data=fields, confidence=confidence, engine=self.name, raw_text=raw)
 
