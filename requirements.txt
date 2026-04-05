@@ -6,6 +6,9 @@ httpx>=0.27.0
 easyofd>=0.0.9
 tqdm>=4.66.0
 
+# Web UI
+streamlit>=1.28.0
+
 # 可选：本地 OCR 兜底（完全免费，无需 API Key）
 # pip install paddlepaddle paddleocr
 paddlepaddle>=3.0.0

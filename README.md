@@ -1,5 +1,7 @@
 # 发票夹子 v1.3.0 🧾
 
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE) [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey.svg)]() [![GitHub Stars](https://img.shields.io/github/stars/Alan5168/fapiao-clipper?style=social)](https://github.com/Alan5168/fapiao-clipper/stargazers) [![ClawHub](https://img.shields.io/badge/ClawHub-install-green.svg)](https://clawhub.ai/skills/fapiao-clipper)
+
 > 中国发票专用 · 本地 AI 识别 · 3 分钟上手
 
 [快速开始](#快速开始) · [功能特性](#功能特性) · [使用示例](#使用示例) · [架构说明](#架构说明)
@@ -21,52 +23,81 @@
 
 ### 1. 安装（30 秒）
 
+**方式一：一键安装（推荐）**
+如果你使用 [OpenClaw](https://openclaw.ai)，一行命令搞定：
 ```bash
-# 克隆仓库
+npx clawhub@latest install fapiao-clipper
+```
+👉 https://clawhub.ai/skills/fapiao-clipper
+
+**方式二：GitHub 手动安装**
+```bash
 git clone https://github.com/Alan5168/fapiao-clipper.git
 cd fapiao-clipper
-
-# 安装依赖
 pip install -r requirements.txt
 ```
 
 ### 2. 配置邮箱（1 分钟）
 
-复制模板配置文件：
-
 ```bash
 cp config/config.yaml.template config/config.yaml
+# 编辑 config/config.yaml 填入邮箱 IMAP 信息
 ```
-
-编辑 `config/config.yaml`：
-
-```yaml
-email:
-  imap_server: imap.qq.com        # 你的邮箱 IMAP 服务器
-  username: your_email@qq.com     # 你的邮箱
-  password: your_auth_code        # 授权码（不是邮箱密码）
-  download_dir: ~/Documents/发票夹子/inbox
-```
-
-> 💡 常见邮箱 IMAP 服务器：
-> - QQ 邮箱：imap.qq.com
-> - 163 邮箱：imap.163.com
-> - Gmail：imap.gmail.com
 
 ### 3. 运行（1 分钟）
 
 ```bash
-# 扫描邮箱和本地目录
-python3 main.py scan
-
-# 查看已识别发票
-python3 main.py list
-
-# 导出报销单（Excel + 合并 PDF）
-python3 main.py export --format both
+python3 main.py scan   # 扫描邮箱和本地目录
+python3 main.py list   # 查看已识别发票
+python3 main.py export --format both  # 导出报销 Excel + 合并 PDF
 ```
 
-🎉 完成！报销文件已生成在 `~/Documents/发票夹子/exports/`。
+🎉 完成！文件在 `~/Documents/发票夹子/exports/`，直接发给财务。
+
+### 4. Web UI 界面（可选，推荐）
+
+发票夹子提供图形化 Web 界面，更适合财务人员日常使用：
+
+**安装步骤：**
+
+```bash
+# 1. 克隆代码
+git clone https://github.com/Alan5168/fapiao-clipper.git
+cd fapiao-clipper
+
+# 2. 创建虚拟环境并安装（推荐）
+python3 -m venv .venv
+source .venv/bin/activate  # Windows 用 .venv\Scripts\activate
+pip install -e .
+
+# 嫌麻烦也可以直接安装到用户目录（macOS/Linux）
+pip install --user -e .
+
+# 3. 配置（填入邮箱 IMAP 信息）
+cp config/config.yaml.template config/config.yaml
+
+# 4. 启动 Web UI
+streamlit run app.py
+```
+
+浏览器自动打开 http://localhost:8501
+
+> ⚠️ 必须先 `pip install -e .` 安装包，否则 Streamlit 无法导入 `invoice_clipper` 模块。
+
+**功能说明**：
+- **📤 扫描发票**：拖拽上传 PDF/图片，实时显示识别结果
+- **📋 发票列表**：表格展示所有发票，支持状态筛选和批量操作
+- **🔍 查询筛选**：按日期范围、销售方、购买方精准查找
+- **📥 导出报销**：一键导出 Excel 明细表 + PDF 报销包
+
+**特点**：
+- 无需命令行，浏览器即可操作
+- 实时预览，识别结果即时可见
+- 批量管理，支持多选标记排除/恢复
+
+![Web UI 界面预览](./docs/web-ui-preview.png)
+*上图：发票列表页面，展示所有发票的日期、号码、金额和状态*
+
 
 ---
 
@@ -94,28 +125,30 @@ python3 main.py export --format both
 - **链接解析**：识别邮件正文中的发票下载链接，自动抓取
 - **目录监控**：指定文件夹监控，新发票自动入库
 
-### 🔍 智能验真
+### 🔍 智能验真（8项财务风控）
 
-自动对接国家税务总局查验平台：
+自动对接国家税务总局查验平台，内置专业财务风控逻辑：
 
-- ✅ 发票真伪验证
-- ✅ 发票状态（正常/作废/红冲）
-- ✅ 开票日期合规检查（超 365 天预警）
-- ✅ 重复报销检测
+| # | 风控项 | 逻辑说明 |
+|---|--------|---------|
+| ✅ | 发票真伪验证 | 税局官方接口校验 |
+| 🚫 | 作废/红冲检测 | 发现"作废"或"红冲"状态立即预警 |
+| ⏰ | 365天超期预警 | 开票日期超过365天不合规，不能报销 |
+| 🔄 | 重复报销检测 | 同一发票号码年内是否已报销过 |
+| 🏢 | 销售方风险库 | 对接动态黑名单，异常企业立即标记 |
+| 💰 | 金额阈值预警 | 单笔超过设定金额自动提醒（如5万以上） |
+| 📐 | 税率异常检测 | 税率与行业常规不符则预警 |
+| 🧾 | 增值税抵扣检查 | 增值税专用发票的抵扣联校验 |
 
 ### 📊 一键导出
 
 ```bash
-# 导出 Excel 明细表 + 合并 PDF
 python3 main.py export --format both
-
-# 按日期筛选
-python3 main.py export --from 2024-01-01 --to 2024-03-31
 ```
 
 导出文件：
-- `报销明细_YYYYMMDD.xlsx`：含发票号码、日期、金额、销售方等字段
-- `报销发票_YYYYMMDD.pdf`：所有发票合并为一个 PDF，方便打印
+- `报销明细_YYYYMMDD.xlsx`：发票号码、日期、金额、销售方等完整字段
+- `报销发票_YYYYMMDD.pdf`：所有发票合并为一个 PDF，方便打印报销
 
 ---
 
@@ -124,39 +157,23 @@ python3 main.py export --from 2024-01-01 --to 2024-03-31
 ### 场景 1：月末集中报销
 
 ```bash
-# 1. 扫描邮箱和监控目录，自动下载新发票
-python3 main.py scan
-
-# 2. 查看本月发票统计
-python3 main.py list
-
-# 3. 导出本月的报销单
-python3 main.py export --from 2024-03-01 --to 2024-03-31 --format both
-
-# 4. 生成的文件在 ~/Documents/发票夹子/exports/，直接发给财务
+python3 main.py scan                              # 自动下载新发票
+python3 main.py list                             # 查看本月发票
+python3 main.py export --from 2024-03-01 --to 2024-03-31 --format both  # 导出报销
 ```
 
-### 场景 2：单张发票识别
+### 场景 2：验真排查
 
 ```bash
-# 处理单张发票（测试或补录）
-python3 main.py process /path/to/发票.pdf
-
-# 输出示例：
-# ✅ 处理成功：北京某某科技有限公司 | ¥1,250.00
+python3 main.py verify     # 批量验真所有发票
+python3 main.py problems   # 查看问题发票（作废/超期/重复/风险）
 ```
 
-### 场景 3：排除非发票文件
+### 场景 3：排除非报销项
 
 ```bash
-# 查看所有发票（包括已标记不报销的）
-python3 main.py list --all
-
-# 标记某张发票不报销（如个人消费）
-python3 main.py exclude 123
-
-# 恢复报销
-python3 main.py include 123
+python3 main.py exclude 123  # 第123号发票不报销
+python3 main.py include 123  # 恢复报销
 ```
 
 ---
@@ -164,32 +181,56 @@ python3 main.py include 123
 ## 架构说明 🏗️
 
 ```
-发票夹子 v1.3.0 架构
-│
-├─ 输入层
-│  ├─ 邮箱 IMAP 扫描
-│  ├─ 本地目录监控
-│  └─ 单文件处理
-│
-├─ 识别层（本地 AI）
-│  ├─ 第1级：PyMuPDF 文本提取（毫秒级）
-│  │   └─ 修复跨行匹配，日期标准化
-│  └─ 第2级：Qwen3-VL 视觉模型（备用）
-│      └─ 扫描件/复杂布局识别
-│
-├─ 数据处理层
-│  ├─ 字段标准化（日期、金额、名称）
-│  ├─ 重复检测
-│  └─ 验真对接（国家税务总局）
-│
-├─ 存储层
-│  ├─ SQLite 数据库（本地）
-│  └─ PDF 归档（按日期分类）
-│
-└─ 输出层
-   ├─ Excel 明细导出
-   ├─ 合并 PDF 导出
-   └─ 验真报告
+┌─────────────────────────────────────────────────────────┐
+│                        发 票 夹 子                        │
+└─────────────────────────────────────────────────────────┘
+                            │
+          ┌─────────────────┼──────────────────┐
+          ▼                 ▼                  ▼
+    ┌──────────┐     ┌───────────┐     ┌────────────┐
+    │ 📧 邮箱  │     │ 📁 本地   │     │ 📄 单张    │
+    │ IMAP扫描 │     │ 目录监控  │     │ 文件拖入   │
+    └────┬─────┘     └─────┬─────┘     └─────┬──────┘
+         │                 │                  │
+         └─────────────────┼──────────────────┘
+                           ▼
+              ┌────────────────────────┐
+              │     📥 发票入库        │
+              │  （PDF / OFD / 图片）   │
+              └───────────┬────────────┘
+                          ▼
+              ┌────────────────────────┐
+              │  🔍 二级识别引擎        │
+              │ ┌────────────────────┐ │
+              │ │ 第1级：PyMuPDF     │ │  ← 毫秒级（可搜索PDF）
+              │ │  文本提取           │ │
+              │ └─────────┬──────────┘ │
+              │ ┌─────────▼──────────┐ │
+              │ │ 第2级：Qwen3-VL   │ │  ← 视觉备用（扫描件）
+              │ │  本地视觉模型       │ │
+              │ └────────────────────┘ │
+              └───────────┬────────────┘
+                          ▼
+              ┌────────────────────────┐
+              │  📋 数据处理层          │
+              │  字段标准化 / 重复检测  │
+              │  销售方黑名单匹配       │
+              └───────────┬────────────┘
+                          ▼
+         ┌────────────────┼────────────────┐
+         ▼                ▼                 ▼
+  ┌────────────┐   ┌────────────┐   ┌─────────────┐
+  │ 🔍 8项    │   │ 💾 SQLite  │   │ 📁 PDF     │
+  │ 财务风控  │   │ 数据库     │   │ 归档存储   │
+  │ 验真      │   │ 本地存储   │   │ 按日期分类 │
+  └─────┬──────┘   └─────┬──────┘   └─────────────┘
+        │                │
+        └────────┬────────┘
+                 ▼
+        ┌────────────────────────┐
+        │  📤 一键导出            │
+        │  Excel明细 + 合并PDF    │
+        └────────────────────────┘
 ```
 
 ---
@@ -219,31 +260,13 @@ MIT License - 详见 [LICENSE](LICENSE) 文件。
 
 ---
 
-## 反馈与支持 💬
-
-- **GitHub Issues**: [提交问题或建议](https://github.com/Alan5168/fapiao-clipper/issues)
-- **小红书**: 关注「财务效率工具」相关话题，分享使用心得
-
----
-
-<p align="center">
-  发票夹子 · 让报销不再头疼 🧾✨
-</p>
-
-<p align="center">
-  Made with ❤️ for Chinese freelancers & small business owners
-</p>
----
-
 ## 🦞 ClawHub 一键安装
-
-如果你使用 [OpenClaw](https://openclaw.ai)，可以通过 [ClawHub](https://clawhub.ai) 一键安装：
 
 ```bash
 npx clawhub@latest install fapiao-clipper
 ```
 
-或直接访问：👉 https://clawhub.ai/skills/fapiao-clipper
+👉 https://clawhub.ai/skills/fapiao-clipper
 
 ---
 
@@ -253,6 +276,7 @@ npx clawhub@latest install fapiao-clipper
 - ✨ 简化降级链为 2 级（PyMuPDF → Qwen3-VL）
 - 🐛 修复 seller/buyer 跨行匹配问题
 - 📅 日期统一标准化为 YYYY-MM-DD
+- 🛡️ 新增 8 项财务风控验真（作废/红冲/超期/重复/黑名单/金额/税率/抵扣）
 - 📝 适配小红书引流，README 重构
 
 ### v1.2.0
@@ -268,46 +292,15 @@ npx clawhub@latest install fapiao-clipper
 
 ---
 
-## 🤝 参与贡献
-
-欢迎提交 Issue 和 PR！
-
-1. Fork 本仓库
-2. 创建你的特性分支 (`git checkout -b feature/AmazingFeature`)
-3. 提交更改 (`git commit -m 'Add some AmazingFeature'`)
-4. 推送到分支 (`git push origin feature/AmazingFeature`)
-5. 打开 Pull Request
-
----
-
-## 📊 使用数据
-
-- ⭐ GitHub Stars: [![GitHub stars](https://img.shields.io/github/stars/Alan5168/fapiao-clipper?style=social)](https://github.com/Alan5168/fapiao-clipper/stargazers)
-- 🦞 ClawHub 安装: 即将上线
-- 🌏 主要用户: 自由职业者、小微企业、财务外包
-
----
-
-## 🔮 路线图
-
-- [ ] 支持更多发票类型（火车票、机票行程单）
-- [ ] 多币种支持（外币发票汇率转换）
-- [ ] 企业微信/钉钉机器人通知
-- [ ] Web 可视化界面
-- [ ] 移动端 App（iOS/Android）
-
----
-
 <p align="center">
   <b>发票夹子 · 让报销不再头疼 🧾✨</b>
 </p>
 
 <p align="center">
-  Made with ❤️ by Alan Li | 中国自由职业者 & 小微企业的财务效率工具
+  Made with ❤️ by Alan Li | 中国自由职业者 & 小微企业财务效率工具
 </p>
 
 <p align="center">
   <a href="https://github.com/Alan5168/fapiao-clipper">GitHub</a> •
-  <a href="https://clawhub.ai/skills/fapiao-clipper">ClawHub</a> •
-  <a href="https://www.xiaohongshu.com">小红书</a>
+  <a href="https://clawhub.ai/skills/fapiao-clipper">ClawHub</a>
 </p>

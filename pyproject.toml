@@ -1,0 +1,53 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fapiao-clipper"
+version = "2.0.0"
+description = "中国发票识别 · 本地 AI · Web UI"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [
+    {name = "Alan Li", email = "alanli@example.com"}
+]
+keywords = ["invoice", "fapiao", "ocr", "python"]
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+dependencies = [
+    "pymupdf>=1.24.0",
+    "openpyxl>=3.1.0",
+    "pyyaml>=6.0",
+    "httpx>=0.27.0",
+    "easyofd>=0.0.9",
+    "tqdm>=4.66.0",
+    "streamlit>=1.28.0",
+    "pandas>=2.0.0",
+]
+
+[project.optional-dependencies]
+ocr = [
+    "paddlepaddle>=3.0.0",
+    "paddleocr>=2.7.0",
+]
+dev = [
+    "pytest>=7.0",
+    "black>=23.0",
+]
+
+[project.scripts]
+fapiao = "invoice_clipper.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["invoice_clipper*"]
+
+[tool.streamlit]
+name = "发票夹子"
+icon = "📎"
