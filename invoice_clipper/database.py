@@ -54,6 +54,7 @@ def init_db(db_path: str):
         conn.execute("CREATE INDEX IF NOT EXISTS idx_buyer ON invoices(buyer)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_tax_status ON invoices(tax_status)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_excluded ON invoices(excluded)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_invoice_number ON invoices(invoice_number)")
         conn.commit()
     logger.info(f"数据库初始化完成: {db_path}")
 
@@ -76,13 +77,25 @@ def insert_invoice(db_path: str, data: dict) -> int:
 
 
 def is_duplicate(db_path: str, invoice_number: str, amount_with_tax: float) -> bool:
-    """判断是否重复（发票号+金额）"""
+    """判断是否重复（发票号+金额完全相同）"""
     if not invoice_number:
         return False
     with get_conn(db_path) as conn:
         row = conn.execute(
             "SELECT id FROM invoices WHERE invoice_number=? AND amount_with_tax=?",
             (invoice_number, amount_with_tax)
+        ).fetchone()
+    return row is not None
+
+
+def exists_by_invoice_number(db_path: str, invoice_number: str) -> bool:
+    """判断发票号码是否已存在（不管金额，防止同一发票多次入库）"""
+    if not invoice_number:
+        return False
+    with get_conn(db_path) as conn:
+        row = conn.execute(
+            "SELECT id FROM invoices WHERE invoice_number=? LIMIT 1",
+            (invoice_number,)
         ).fetchone()
     return row is not None
 

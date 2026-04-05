@@ -6,7 +6,7 @@ from pathlib import Path
 from datetime import datetime
 from typing import Optional
 
-from .database import insert_invoice, is_duplicate, init_db
+from .database import insert_invoice, is_duplicate, exists_by_invoice_number, init_db
 from .file_processor import (
     extract_text_from_pdf, ofd_to_pdf,
     build_archive_path, archive_invoice
@@ -69,18 +69,22 @@ class InvoiceProcessor:
 
         # 从 EngineResult.data 获取字段
         fields = result.data
-        
-        # 去重检查
+
+        # 去重检查（双重保护）
         inv_no = fields.get("invoice_number") or ""
-        # 修复: 确保 amount 是数字类型
         amount_raw = fields.get("amount_with_tax") or 0
         try:
             amount = float(amount_raw)
         except (ValueError, TypeError):
             amount = 0.0
-        
-        if inv_no and is_duplicate(self.db_path, inv_no, amount):
-            logger.warning(f"重复发票，跳过: {inv_no} / {amount}")
+
+        # 保护1：发票号+金额完全相同 → 严格重复
+        if inv_no and is_duplicate(str(self.db_path), inv_no, amount):
+            logger.warning(f"重复发票（发票号+金额相同），跳过: {inv_no} / {amount:.2f}")
+            return None
+        # 保护2：同一发票号已存在（不管金额）→ 防止误识别导致重复入库
+        if inv_no and exists_by_invoice_number(str(self.db_path), inv_no):
+            logger.warning(f"重复发票（发票号已存在），跳过: {inv_no}")
             return None
 
         # 归档文件
@@ -95,24 +99,24 @@ class InvoiceProcessor:
 
         # 入库
         record = {
-            "invoice_number": inv_no,
-            "invoice_code": fields.get("invoice_code"),
-            "date": fields.get("date"),
-            "amount": fields.get("amount"),
+            "invoice_number":   inv_no,
+            "invoice_code":     fields.get("invoice_code"),
+            "date":            fields.get("date"),
+            "amount":          fields.get("amount"),
             "amount_with_tax": amount,
-            "tax": fields.get("tax"),
-            "seller": fields.get("seller"),
-            "buyer": fields.get("buyer"),
-            "category": fields.get("category"),
-            "invoice_type": fields.get("invoice_type"),
-            "source": source,
+            "tax":             fields.get("tax"),
+            "seller":          fields.get("seller"),
+            "buyer":           fields.get("buyer"),
+            "category":        fields.get("category"),
+            "invoice_type":    fields.get("invoice_type"),
+            "source":          source,
             "original_filename": file_path.name,
-            "stored_path": str(archived),
-            "created_at": datetime.now().isoformat(),
-            "raw_text": raw_text[:2000],
-            "raw_json": str(fields),
+            "stored_path":     str(archived),
+            "created_at":      datetime.now().isoformat(),
+            "raw_text":        raw_text[:2000],
+            "raw_json":        str(fields),
         }
-        invoice_id = insert_invoice(self.db_path, record)
+        invoice_id = insert_invoice(str(self.db_path), record)
         record["id"] = invoice_id
 
         # ── 自动验真 ───────────────────────────────────────
@@ -155,10 +159,9 @@ class InvoiceProcessor:
         # 使用 tqdm 进度条
         try:
             from tqdm import tqdm
-            iterator = tqdm(files, desc="处理进度", unit="张", 
+            iterator = tqdm(files, desc="处理进度", unit="张",
                           bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}]")
         except ImportError:
-            # 没有 tqdm 就用普通迭代
             iterator = files
             logger.info("提示：安装 tqdm 可显示进度条 (pip install tqdm)")
 
