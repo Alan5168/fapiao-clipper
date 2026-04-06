@@ -15,7 +15,7 @@ RISK_ITEMS = [
     ("内控禁止项",    "礼品/烟酒卡/奢侈品等",                            "BLOCK"),
     ("重复报销",      "发票号+金额已报销过",                             "BLOCK"),
     ("跨年检查",      "非本年发票自动排除",                              "WARN"),
-    ("个人抬头发票",  "仅差旅/交通/通讯类可报销",                        "WARN"),
+    ("个人抬头发票",  "仅差旅/交通/通讯类reimbursable",                        "WARN"),
     ("违法失信主体",  "销售方在税务局失信名录中（用户自查）",            "BLOCK"),
     ("税务状态",      "作废/红冲/失控等状态不能报销（用户自查）",        "BLOCK"),
 ]
@@ -39,11 +39,11 @@ def get_db_path(cfg):
     return Path(cfg["storage"]["db_path"]).expanduser().resolve()
 
 def get_invoice_count(cfg):
-    """返回 (总数, 可报销数, 不可报销数)"""
+    """返回 (总数, reimbursable数, 不reimbursable数)"""
     invs = load_invoices(cfg, {"only_included": False})
     total = len(invs)
-   报销able = sum(1 for i in invs if not i.get("excluded"))
-    return total, 报销able, total - 报销able
+    reimbursable = sum(1 for i in invs if not i.get("excluded"))
+    return total, reimbursable, total - reimbursable
 
 @st.cache_data(ttl=30)
 def load_invoices(cfg, filters=None):
@@ -217,13 +217,13 @@ def page_list(cfg):
     invs_ex = [i for i in invs_all if i.get("excluded")]
 
     total_amount    = sum(i.get("amount_with_tax", 0) for i in invs_all)
-    报销able_amount = sum(i.get("amount_with_tax", 0) for i in invs_ok)
+    reimbursable_amount = sum(i.get("amount_with_tax", 0) for i in invs_ok)
 
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("总发票数", f"{len(invs_all)} 张")
-    c2.metric("可报销", f"{len(invs_ok)} 张")
+    c2.metric("reimbursable", f"{len(invs_ok)} 张")
     c3.metric("已排除", f"{len(invs_ex)} 张")
-    c4.metric("可报销金额", f"¥{报销able_amount:,.2f}",
+    c4.metric("reimbursable_amount", f"¥{reimbursable_amount:,.2f}",
               delta=f"总金额 ¥{total_amount:,.2f}")
 
     st.markdown("---")
@@ -383,7 +383,7 @@ def page_query(cfg):
         seller = st.text_input("销售方名称", placeholder="输入销售方关键词...")
     with c2:
         buyer = st.text_input("购买方名称", placeholder="输入购买方关键词...")
-    only = st.checkbox("只显示可报销发票", value=True, key="qry_only")
+    only = st.checkbox("只显示reimbursable发票", value=True, key="qry_only")
 
     if st.button("🔍 查询", type="primary", use_container_width=True):
         filters = {
@@ -408,7 +408,7 @@ def page_query(cfg):
             "状态":       "❌ 排除" if i.get("excluded") else "✅ 正常",
         } for i in invs]
         df = pd.DataFrame(data)
-        st.success(f"找到 {len(df)} 张发票，可报销合计 ¥{df[df['状态']=='✅ 正常']['金额'].sum():,.2f}")
+        st.success(f"找到 {len(df)} 张发票，reimbursable_total ¥{df[df['状态']=='✅ 正常']['金额'].sum():,.2f}")
         st.dataframe(df.drop(columns=["ID"]),
             use_container_width=True, hide_index=True,
             column_config={"金额": st.column_config.NumberColumn(format="¥%.2f")})
@@ -443,7 +443,7 @@ def page_export(cfg):
         st.warning("没有符合条件的发票")
         return
     total = sum(i.get("amount_with_tax", 0) for i in invs)
-    st.info(f"将导出 {len(invs)} 张发票，可报销合计 ¥{total:,.2f}")
+    st.info(f"将导出 {len(invs)} 张发票，reimbursable_total ¥{total:,.2f}")
 
     if st.button("📥 开始导出", type="primary", use_container_width=True):
         from invoice_clipper.exporter import export_excel, export_merged_pdf, build_export_label

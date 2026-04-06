@@ -82,6 +82,8 @@ streamlit run app.py
 
 浏览器自动打开 http://localhost:8501
 
+> 💡 局域网外访问（公司WiFi/手机热点）：需要 Tailscale（详见下文「远程访问」章节）
+
 > ⚠️ 必须先 `pip install -e .` 安装包，否则 Streamlit 无法导入 `invoice_clipper` 模块。
 
 **功能说明**：
@@ -100,6 +102,40 @@ streamlit run app.py
 
 
 ---
+
+### 🌐 远程访问（局域网外）
+
+Web UI 默认只在本地 `localhost:8501` 访问。如果需要在公司 WiFi、iPhone 热点等**非局域网**环境下访问，有两种方式：
+
+#### 方式一：Tailscale（推荐，免费）
+
+1. **安装 Tailscale**：[tailscale.com/download](https://tailscale.com/download)
+   ```bash
+   brew install --cask tailscale
+   ```
+
+2. **在你的 Mac Studio 和手机上安装 Tailscale**，用同一账号登录
+
+3. **开启 exit node**（手机使用 Mac Studio 的网络）：
+   ```bash
+   tailscale set --exit-node=mac-studio-hostname
+   ```
+
+4. **访问地址**：`http://<mac-studio的Tailscale IP>:8501`
+
+> 💡 OpenClaw 已内置 Tailscale，你的 Mac Studio Tailscale 地址在 `openclaw status` 里可以看到。
+
+#### 方式二：frp 内网穿透（无需额外软件）
+
+如果你有公网服务器，可以用过 frp 将 `localhost:8501` 暴露到公网：
+```ini
+[streamlit]
+type = tcp
+local_ip = 127.0.0.1
+local_port = 8501
+remote_port = 18501
+```
+
 
 ## 功能特性 ✨
 

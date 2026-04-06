@@ -4,9 +4,11 @@
 检查范围：
 1. 内控禁止项：礼品/烟酒卡/奢侈品/涂改/大头小尾等
 2. 抬头校验：个人 vs 企业
-3. 超期检查：默认>365天
+3. 跨年检查：非本年发票提示并排除
 4. 重复报销：数据库已有相同发票号+金额
-5. 税务状态：查验平台接口（详见 tax_verify_online）
+5. 违法失信主体：税务局失信名录（用户自查）
+6. 税务状态：查验平台接口（用户自查）
+7. 税额异常：税额=价税合计为不可能
 """
 
 import re
@@ -114,16 +116,23 @@ def verify_invoice(fields: dict, db_path: str = None,
                 })
                 break
 
-    # ── 4. 超期检查 ──────────────────────────────────────
+    # ── 4. 跨年检查 ──────────────────────────────────────
+    # 非本年发票提示并排除（企业通常只报销当年发票）
     if inv_date_str:
         try:
             inv_date = datetime.strptime(inv_date_str[:10], "%Y-%m-%d").date()
-            age_days = (date.today() - inv_date).days
-            if age_days > validity_days:
+            current_year = date.today().year
+            if inv_date.year != current_year:
                 warnings.append({
-                    "level": "BLOCK",
-                    "code": "OVERDUE",
-                    "message": f"发票已超期 {age_days} 天（规定≤{validity_days}天），无法报销（如有特殊情况请附说明）",
+                    "level": "WARN",
+                    "code": "CROSS_YEAR",
+                    "message": f"发票日期 {inv_date.year} 年，非本年（{current_year}）发票，将被排除，请确认是否需要报销",
+                })
+            elif inv_date > date.today():
+                warnings.append({
+                    "level": "WARN",
+                    "code": "FUTURE_DATE",
+                    "message": f"发票日期 {inv_date} 晚于今天，属于未来日期，请核实",
                 })
         except ValueError:
             pass  # 日期格式不对就不检查
@@ -150,10 +159,18 @@ def verify_invoice(fields: dict, db_path: str = None,
                 "message": f"销售方「{seller}」在{bl_hit.get('source', '黑名单')}失信名录中（{violation}），禁止报销",
             })
 
-    # ── 6. 大头小尾检查 ─────────────────────────────────
-    # 通过机器学习/规则判断票面金额是否异常（太小的金额可能是大头小尾）
-    # 这里用启发式：金额极小（<1元）但有税额 → 疑似异常
+    # ── 6. 税额异常检查（不可能的税率）────────────────
+    # 税额 == 价税合计 在现实中不可能（除非税率为100%）
     tax_amount = fields.get("tax") or 0
+    if amount and tax_amount and abs(tax_amount - amount) < 0.01:
+        warnings.append({
+            "level": "BLOCK",
+            "code": "IMPOSSIBLE_TAX",
+            "message": f"税额={tax_amount:.2f} 元，价税合计={amount:.2f} 元（比率 {tax_amount/amount*100:.0f}%），不可能的税率，数据提取疑似错误",
+        })
+
+    # ── 7. 大头小尾检查 ─────────────────────────────────
+    # 金额极小（<1元）但有税额 → 疑似异常
     if amount and amount < 1 and tax_amount and tax_amount > 0:
         warnings.append({
             "level": "WARN",
@@ -161,10 +178,10 @@ def verify_invoice(fields: dict, db_path: str = None,
             "message": f"票面金额异常（{amount}元），请确认非大头小尾发票",
         })
 
-    # ── 7. OFD 电子签名验签 ─────────────────────────────
+    # ── 8. OFD 电子签名验签 ─────────────────────────────
     ofd_ok = _verify_ofd_signature(fields.get("stored_path"))
 
-    # ── 8. 税务查验（可选，有接口才执行）────────────────
+    # ── 9. 税务查验（可选，有接口才执行）────────────────
     tax_status, blacklist_status, check_msg = _tax_bureau_check(
         invoice_number, fields.get("invoice_code"), fields.get("date"), fields.get("amount_with_tax")
     )
@@ -206,7 +223,6 @@ def _verify_ofd_signature(stored_path: str) -> Optional[bool]:
     try:
         from easyofd import OFDReader
         reader = OFDReader(path)
-        # easyofd 可验证电子签章，返回 True/False
         is_valid = reader.verify_signature() if hasattr(reader, "verify_signature") else None
         logger.info(f"OFD 签名验证结果: {is_valid} — {path.name}")
         return is_valid
@@ -222,22 +238,14 @@ def _tax_bureau_check(invoice_number: str, invoice_code: str,
                       inv_date: str, amount: float) -> tuple:
     """
     调用税务查验接口（国家税务总局查验平台）
-
-    目前支持：
-    - 巨总税平台（fpcy.jss.com.cn）- 需要 cookie 登录，较难自动化
-    - 企业内部白名单（可配置 in config）
-
+    目前无免费接口，预留接口供后续接入
     返回：(tax_status, blacklist_status, check_msg)
     如无法查验返回 ('unchecked', 'unchecked', '')
     """
     if not invoice_number or not invoice_code:
         return "unchecked", "unchecked", ""
 
-    # 检查是否有配置内部黑名单（公司自建白名单/黑名单）
-    # 可在 config.yaml 中配置 blacklist_companies: [...]
-    # 此处留接口，后续接入
     try:
-        # 留空接口，供后续接入企业黑名单数据库或税局 API
         return "unchecked", "unchecked", ""
     except Exception:
         return "unchecked", "unchecked", ""
