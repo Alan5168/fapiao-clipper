@@ -1,4 +1,4 @@
-# 发票夹子 v1.5.0 🧾
+# 发票夹子 v1.5.1 🧾
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE) [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey.svg)]() [![GitHub Stars](https://img.shields.io/github/stars/Alan5168/fapiao-clipper?style=social)](https://github.com/Alan5168/fapiao-clipper/stargazers) [![ClawHub](https://img.shields.io/badge/ClawHub-install-green.svg)](https://clawhub.ai/skills/fapiao-clipper)
 
