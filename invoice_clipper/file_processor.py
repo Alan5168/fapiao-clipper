@@ -54,20 +54,33 @@ def ofd_to_pdf(ofd_path: Path, output_dir: Optional[Path] = None) -> Path:
     errors = []
     
     # 方法1: 使用 easyofd Python 库（推荐）
+    # easyofd 不支持非 ASCII 路径（如中文文件名），需要先复制到临时目录
     try:
+        import tempfile
         from easyofd import OFD
         
-        ofd = OFD()
-        ofd.read(str(ofd_path))  # 先读取文件
-        ofd.to_pdf(str(output_path))  # 再转换
+        tmp_dir = tempfile.mkdtemp(prefix="ofd_conv_")
+        tmp_src = Path(tmp_dir) / "input.ofd"
+        tmp_out = Path(tmp_dir) / "output.pdf"
+        shutil.copy2(str(ofd_path), str(tmp_src))
         
-        if output_path.exists():
+        ofd = OFD()
+        ofd.read(str(tmp_src))  # 先读取文件
+        ofd.to_pdf(str(tmp_out))  # 再转换
+        
+        if tmp_out.exists():
+            shutil.copy2(str(tmp_out), str(output_path))
+            shutil.rmtree(tmp_dir, ignore_errors=True)
             logger.info(f"OFD 转 PDF 成功 (easyofd): {ofd_path.name}")
             return output_path
     except ImportError:
         errors.append("easyofd 未安装，请运行: pip install easyofd")
+        if tmp_dir and Path(tmp_dir).exists():
+            shutil.rmtree(tmp_dir, ignore_errors=True)
     except Exception as e:
         errors.append(f"easyofd: {e}")
+        if tmp_dir and Path(tmp_dir).exists():
+            shutil.rmtree(tmp_dir, ignore_errors=True)
     
     # 方法2: 使用系统工具 ofd2pdf
     try:
