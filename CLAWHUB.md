@@ -4,7 +4,7 @@
 
 - **Name**: fapiao-clipper
 - **Display Name**: 发票夹子
-- **Version**: 1.3.0
+- **Version**: 1.5.0
 - **Description**: 中国发票专用 · 本地 AI 识别 · 3 分钟上手
 - **Author**: Alan Li
 - **License**: MIT
@@ -71,7 +71,7 @@ python3 main.py export --format both
 
 ## 版本历史
 
-- v1.3.0 (2024-04-03): 简化架构为 2 级，修复跨行匹配
+- v1.5.0 (2024-04-03): 简化架构为 2 级，修复跨行匹配
 - v1.2.0: 新增 OpenDataLoader PDF 引擎
 - v1.1.0: 新增四级降级链路
 - v1.0.0: 初始版本
