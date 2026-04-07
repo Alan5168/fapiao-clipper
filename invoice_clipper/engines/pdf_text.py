@@ -81,8 +81,10 @@ def _extract_seller_buyer(text: str) -> tuple:
     seller = None
     buyer = None
     
-    # 清理文本：将多个换行符替换为单个，便于匹配
-    cleaned_text = re.sub(r'\n+', '\n', text)
+    # Step 1: remove ALL spaces (PDF renderer adds space between each character)
+    no_space = re.sub(r'\s+', '', text)
+    # Step 2: compress newlines to delimiter (for segment matching)
+    cleaned_text = re.sub(r'\n+', '|', no_space)
     
     # 策略1：匹配"销售方名称：XXX"（单行或跨行）
     # 使用 re.DOTALL 让 . 匹配换行符

@@ -61,7 +61,18 @@ class InvoiceProcessor:
             logger.error(f"PDF 文本提取失败: {pdf_path.name} - {e}")
             raw_text = ""
 
-        # AI 识别
+        # ============================================================
+        # 内容验证：必须有"发票号码"+ 包含"发票"（覆盖所有类型：电子发票/出租车发票/定额发票等）
+        text_lower = raw_text.lower()
+        has_number = "发票号码" in text_lower
+        has_invoice_word = "发票" in text_lower
+        if not (has_number and has_invoice_word):
+            logger.warning(
+                f"⚠️ 非发票文件，跳过: {file_path.name} "
+                f"(发票号码:{has_number}, 含发票字样:{has_invoice_word})"
+            )
+            return None
+
         result = self.recognizer.recognize(pdf_path, raw_text)
         if not result or not result.is_valid:
             logger.error(f"识别失败: {pdf_path.name}")

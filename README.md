@@ -1,4 +1,4 @@
-# 发票夹子 v1.4.0 🧾
+# 发票夹子 v1.5.0 🧾
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE) [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey.svg)]() [![GitHub Stars](https://img.shields.io/github/stars/Alan5168/fapiao-clipper?style=social)](https://github.com/Alan5168/fapiao-clipper/stargazers) [![ClawHub](https://img.shields.io/badge/ClawHub-install-green.svg)](https://clawhub.ai/skills/fapiao-clipper)
 
@@ -340,3 +340,18 @@ npx clawhub@latest install fapiao-clipper
   <a href="https://github.com/Alan5168/fapiao-clipper">GitHub</a> •
   <a href="https://clawhub.ai/skills/fapiao-clipper">ClawHub</a>
 </p>
+
+### v1.4.0 (2026-04-07)
+
+#### 🐛 Bug 修复
+- **OFD 中文文件名支持**：`easyofd` 处理中文路径报编码错误，改为先复制到临时 ASCII 路径再转换
+- **PDF seller/buyer 提取修复**：PyMuPDF 提取的文本字符间有空格（字符定位问题），导致销售方/购买方正则匹配失败，改为先去掉所有空格再提取
+- **email_watcher HTML 解析**：jss.com 等查验平台链接返回 HTML 而非 PDF，现能从 HTML 中提取真实 PDF 链接
+
+#### ⚡ 性能/体验优化
+- **qwen3-vl 超时延长**：图片识别超时从 120s 增至 300s（5分钟），适应慢速硬件
+- **DPI 提高**：PDF 转图片 DPI 从 200 提升至 300，图片分辨率提升 45%
+
+#### 🛡️ 安全/质量
+- **发票内容验证**：新增入库前检查，必须同时包含"发票号码"+"发票"字样，防止结算单/订单等非发票文件混入数据库
+

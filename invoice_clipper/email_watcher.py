@@ -129,9 +129,44 @@ def _download_from_url(url: str, timeout: int = 30) -> Optional[bytes]:
             if resp.status_code == 200 and is_invoice and len(resp.content) > 1024:
                 logger.info(f"链接下载成功: {url[:60]}... ({len(resp.content):,} bytes)")
                 return resp.content
-                
+
+            # 如果返回HTML但URL是发票平台，尝试从HTML中提取PDF
+            if resp.status_code == 200 and len(resp.content) > 1024:
+                ct = resp.headers.get("content-type", "").lower()
+                if "text/html" in ct or (not is_invoice and len(resp.content) > 5000):
+                    logger.info(f"  链接返回HTML，尝试解析发票PDF: {url[:60]}")
+                    pdf_data = _extract_pdf_from_html(resp.content, url)
+                    if pdf_data:
+                        return pdf_data
+
     except Exception as e:
         logger.debug(f"下载异常: {url[:40]} — {e}")
+    return None
+
+
+def _extract_pdf_from_html(html_content: bytes, original_url: str) -> Optional[bytes]:
+    """从HTML页面中提取发票PDF文件"""
+    try:
+        text = html_content.decode('utf-8', errors='ignore')
+        # 查找PDF链接
+        pdf_links = re.findall(r'https?://[^\s"\'<>]+\.pdf', text, re.IGNORECASE)
+        if not pdf_links:
+            # 查找form提交地址（发票查验平台常用）
+            form_action = re.search(r'action=["\']([^"\']+)["\']', text)
+            if form_action:
+                action_url = form_action.group(1)
+                if not action_url.startswith('http'):
+                    parsed = urllib.parse.urlparse(original_url)
+                    action_url = f"{parsed.scheme}://{parsed.netloc}{action_url}"
+                logger.info(f"  发现form提交地址，重新请求: {action_url[:60]}")
+                return _download_from_url(action_url)
+            return None
+        # 下载找到的第一个PDF
+        pdf_url = pdf_links[0]
+        logger.info(f"  从HTML提取到PDF链接: {pdf_url[:60]}")
+        return _download_from_url(pdf_url)
+    except Exception as e:
+        logger.debug(f"HTML解析失败: {e}")
     return None
 
 
@@ -240,3 +275,28 @@ def fetch_invoice_attachments(config: dict, inbox_dir: Path) -> List[Path]:
         logger.error(f"邮件拉取失败: {e}")
 
     return new_files
+
+def _extract_pdf_from_html(html_content: bytes, original_url: str) -> Optional[bytes]:
+    """从HTML页面中提取发票PDF文件"""
+    try:
+        text = html_content.decode('utf-8', errors='ignore')
+        # 查找PDF链接
+        pdf_links = re.findall(r'https?://[^\s"\'<>]+\.pdf', text, re.IGNORECASE)
+        if not pdf_links:
+            # 查找HTML中的其他关键链接（如form提交地址）
+            form_action = re.search(r'action=["\']([^"\']+)["\']', text)
+            if form_action:
+                action_url = form_action.group(1)
+                if not action_url.startswith('http'):
+                    parsed = urllib.parse.urlparse(original_url)
+                    action_url = f"{parsed.scheme}://{parsed.netloc}{action_url}"
+                logger.info(f"发现form提交地址，重新请求: {action_url[:60]}")
+                return _download_from_url(action_url)
+            return None
+        # 下载找到的第一个PDF
+        pdf_url = pdf_links[0]
+        logger.info(f"从HTML提取到PDF链接: {pdf_url[:60]}")
+        return _download_from_url(pdf_url)
+    except Exception as e:
+        logger.debug(f"HTML解析失败: {e}")
+    return None

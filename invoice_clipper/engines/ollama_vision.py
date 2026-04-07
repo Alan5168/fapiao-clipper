@@ -149,7 +149,7 @@ class OllamaVisionEngine(BaseEngine):
             resp = httpx.post(
                 f"{self.base_url}/api/chat",
                 json=payload,
-                timeout=120,
+                timeout=300,  # qwen3-vl 图片处理慢
             )
             if resp.status_code != 200:
                 return EngineResult(data=None, confidence=0, engine=self.name, error=f"HTTP {resp.status_code}")
@@ -191,7 +191,7 @@ class OllamaVisionEngine(BaseEngine):
             import fitz
             doc = fitz.open(pdf_path)
             page = doc[0]
-            pix = page.get_pixmap(dpi=200)
+            pix = page.get_pixmap(dpi=300)
             img_bytes = pix.tobytes("png")
             doc.close()
             return img_bytes
